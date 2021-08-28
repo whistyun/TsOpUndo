@@ -31,6 +31,11 @@ namespace TsOperationHistory.Internal
                     accessor = CreateIAccessorWithIndex(obj, p, index);
                     obj = accessor.GetValue(obj, index);
                 }
+                else if (_object is Type)
+                {
+                    accessor = CreateIAccessorWithType(obj, p);
+                    obj = accessor.GetValue(obj);
+                }
                 else
                 {
                     accessor = CreateIAccessor(obj, p);
@@ -69,6 +74,35 @@ namespace TsOperationHistory.Internal
 
             return (IAccessor)Activator.CreateInstance(accessorType, getter, setter);
         }
+        private static IAccessor CreateIAccessorWithType(object _object, string propertyNameSplit)
+        {
+            var propertyInfo = (_object as Type).GetProperty(propertyNameSplit,
+                                BindingFlags.NonPublic |
+                                BindingFlags.Public |
+                                BindingFlags.Static);
+
+            if (propertyInfo == null)
+                return null;
+
+            if ((_object as Type).IsClass == false)
+            {
+                return new StructAccessor(propertyInfo, PublicOnly);
+            }
+
+            var getInfo = propertyInfo.GetGetMethod(PublicOnly is false);
+            var setInfo = propertyInfo.GetSetMethod(PublicOnly is false);
+
+            var getterDelegateType = typeof(Func<,>).MakeGenericType(propertyInfo.DeclaringType, propertyInfo.PropertyType);
+            var getter = getInfo != null ? Delegate.CreateDelegate(getterDelegateType, getInfo) : null; //System.ArgumentException: 'ターゲット メソッドとデリゲート型との間に、シグネチャまたはセキュリティ透過性の互換性がないため、ターゲット メソッドにバインドできません。'
+
+            var setterDelegateType = typeof(Action<,>).MakeGenericType(propertyInfo.DeclaringType, propertyInfo.PropertyType);
+            var setter = setInfo != null ? Delegate.CreateDelegate(setterDelegateType, setInfo) : null; //System.ArgumentException: 'ターゲット メソッドとデリゲート型との間に、シグネチャまたはセキュリティ透過性の互換性がないため、ターゲット メソッドにバインドできません。'
+
+            var accessorType = typeof(PropertyAccessor<,>).MakeGenericType(propertyInfo.DeclaringType, propertyInfo.PropertyType);
+
+            return (IAccessor)Activator.CreateInstance(accessorType, getter, setter);
+        }
+
         private static IAccessor CreateIAccessorWithIndex(object _object, string propertyNameSplit, int index)
         {
             var propertyInfo = _object.GetType().GetProperty(propertyNameSplit,

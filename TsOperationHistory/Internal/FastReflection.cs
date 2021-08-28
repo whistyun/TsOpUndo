@@ -27,6 +27,7 @@ namespace TsOperationHistory.Internal
                 if (p.First() == '[')
                 {
                     p = "Item";
+                    var index = int.Parse(propertyNameSplit.Replace("[", "").Replace("]", ""));
                     accessor = CreateIAccessorWithIndex(obj, p);
                     obj = accessor.GetValue(obj, index);
                 }

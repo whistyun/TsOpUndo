@@ -27,8 +27,7 @@ namespace TsOperationHistory.Internal
                 if (p.First() == '[')
                 {
                     p = "Item";
-                    var index = int.Parse(propertyNameSplit.Replace("[", "").Replace("]", ""));
-                    accessor = CreateIAccessorWithIndex(obj, p, index);
+                    accessor = CreateIAccessorWithIndex(obj, p);
                     obj = accessor.GetValue(obj, index);
                 }
                 else if (_object is Type)
@@ -103,7 +102,7 @@ namespace TsOperationHistory.Internal
             return (IAccessor)Activator.CreateInstance(accessorType, getter, setter);
         }
 
-        private static IAccessor CreateIAccessorWithIndex(object _object, string propertyNameSplit, int index)
+        private static IAccessor CreateIAccessorWithIndex(object _object, string propertyNameSplit)
         {
             var propertyInfo = _object.GetType().GetProperty(propertyNameSplit,
                                 BindingFlags.NonPublic |

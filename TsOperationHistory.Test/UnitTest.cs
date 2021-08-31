@@ -284,5 +284,87 @@ namespace TsOperationHistory.Test
             Assert.AreEqual(14, person.Age);
             Assert.That(person.Children.Count, Is.EqualTo(1));
         }
+
+        [Test]
+        public void DisposeTest()
+        {
+            IOperationController controller = new OperationController();
+            var person = new Person()
+            {
+                Name = "Venus",
+            };
+
+            controller.Execute(person.GenerateSetPropertyOperation(x => x.Name, "Yamada"));
+            Assert.AreEqual("Yamada", person.Name);
+
+            controller.Execute(person.GenerateSetPropertyOperation(x => x.Name, "Tanaka"));
+            Assert.AreEqual("Tanaka", person.Name);
+
+            controller.ExecuteDispose(person, () => person.Restore(() => person.Name = "Tanaka"));
+            Assert.That(person.Name, Is.Null);
+
+            controller.Undo();
+            Assert.AreEqual("Tanaka", person.Name);
+
+            controller.Undo();
+            Assert.AreEqual("Yamada", person.Name);
+
+            controller.Undo();
+            Assert.AreEqual("Venus", person.Name);
+        }
+
+        [Test]
+        public async Task MultiLayeredPropertyTest()
+        {
+            IOperationController controller = new OperationController();
+            var person = new Person();
+            person.RP.Value = "Value1";
+
+            // デフォルトのマージ時間を 70msに設定
+            Operation.DefaultMergeSpan = TimeSpan.FromMilliseconds(70);
+
+            //75ms 待つ
+            await Task.Delay(75);
+
+            controller.ExecuteSetProperty(person, "RP.Value", "Value2");
+            Assert.AreEqual("Value2", person.RP.Value);
+
+            //75ms 待つ
+            await Task.Delay(75);
+
+            controller.ExecuteSetProperty(person, "RP.Value", "Value3");
+            Assert.AreEqual("Value3", person.RP.Value);
+
+            controller.Undo();
+            Assert.AreEqual("Value2", person.RP.Value);
+
+            controller.Undo();
+            Assert.AreEqual("Value1", person.RP.Value);
+
+            Assert.That(controller.CanUndo, Is.False);
+        }
+
+        [Test]
+        public void MultiLayeredPropertyTest2()
+        {
+            IOperationController controller = new OperationController();
+            var person = new Person();
+            person.RP.Value = "Value1";
+
+            using (var watcher = controller.BindPropertyChanged<string>(person, "RP.Value", false))
+            {
+                person.RP.Value = "Value2";
+
+                person.RP.Value = "Value3";
+
+                controller.Undo();
+                Assert.AreEqual("Value2", person.RP.Value);
+
+                controller.Undo();
+                Assert.AreEqual("Value1", person.RP.Value);
+            }
+
+            Assert.That(controller.CanUndo, Is.False);
+        }
     }
 }

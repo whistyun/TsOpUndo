@@ -1,14 +1,21 @@
-﻿using System;
+﻿using NUnit.Framework;
+using Reactive.Bindings;
+using System;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using TsOperationHistory.Extensions;
-using Xunit;
 
 namespace TsOperationHistory.Test
 {
-    internal class Person : Bindable
+    internal class Person : Bindable, IDisposable, IRestore
     {
         private string _name;
+
+        public Person()
+        {
+        }
+
+        public static string StaticValue { get; set; }
 
         public string Name
         {
@@ -24,21 +31,62 @@ namespace TsOperationHistory.Test
             set => SetProperty(ref _age, value);
         }
 
+        public ReactivePropertySlim<string> RP { get; set; } = new ReactivePropertySlim<string>();
+
         private ObservableCollection<Person> _children = new ObservableCollection<Person>();
+        private bool disposedValue;
 
         public ObservableCollection<Person> Children
         {
             get => _children;
             set => SetProperty(ref _children, value);
         }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    RP.Dispose();
+                }
+
+                _name = null;
+                _children = null;
+                RP = null;
+                disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            // このコードを変更しないでください。クリーンアップ コードを 'Dispose(bool disposing)' メソッドに記述します
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
+        }
+
+        public void Restore(Action restorePropertiesAction)
+        {
+            if (!disposedValue) return;
+
+            disposedValue = false;
+            _name = string.Empty;
+            _age = 0;
+            _children = new ObservableCollection<Person>();
+            RP = new ReactivePropertySlim<string>();
+
+            restorePropertiesAction.Invoke();
+            GC.ReRegisterForFinalize(this);
+        }
     }
-    
+
+    [TestFixture]
     public class UnitTest
     {
         /// <summary>
         /// 基本的なUndoRedoのテスト
         /// </summary>
-        [Fact]
+        [Test]
         public void BasicTest()
         {
             IOperationController controller = new OperationController();
@@ -47,24 +95,54 @@ namespace TsOperationHistory.Test
                 Name = "Venus",
             };
 
-            controller.Execute(person.GenerateSetPropertyOperation(x=>x.Name , "Yamada"));
-            Assert.Equal("Yamada",person.Name);
+            controller.Execute(person.GenerateSetPropertyOperation(x => x.Name, "Yamada"));
+            Assert.AreEqual("Yamada", person.Name);
 
-            controller.Execute(person.GenerateSetPropertyOperation(x=>x.Name , "Tanaka"));
-            Assert.Equal("Tanaka",person.Name);
-            
-            controller.Undo();
-            Assert.Equal("Yamada",person.Name);
+            controller.Execute(person.GenerateSetPropertyOperation(x => x.Name, "Tanaka"));
+            Assert.AreEqual("Tanaka", person.Name);
 
             controller.Undo();
-            Assert.Equal("Venus",person.Name);
+            Assert.AreEqual("Yamada", person.Name);
+
+            controller.Undo();
+            Assert.AreEqual("Venus", person.Name);
         }
-        
+
+        /// <summary>
+        /// スタティックプロパティのUndoRedoのテスト
+        /// </summary>
+        [Test]
+        public async Task StaticPropertyTest()
+        {
+            IOperationController controller = new OperationController();
+
+            // デフォルトのマージ時間を 70msに設定
+            Operation.DefaultMergeSpan = TimeSpan.FromMilliseconds(70);
+
+            Person.StaticValue = "Geso";
+
+            controller.ExecuteSetStaticProperty(typeof(Person), "StaticValue", "ika");
+            Assert.AreEqual("ika", Person.StaticValue);
+
+            await Task.Delay(75);
+
+            controller.ExecuteSetStaticProperty(typeof(Person), "StaticValue", "tako");
+            Assert.AreEqual("tako", Person.StaticValue);
+
+            await Task.Delay(75);
+
+            controller.Undo();
+            Assert.AreEqual("ika", Person.StaticValue);
+
+            controller.Undo();
+            Assert.AreEqual("Geso", Person.StaticValue);
+        }
+
         /// <summary>
         /// Operationの自動結合テスト
         /// </summary>
-        [Fact]
-        public async void MergedTest()
+        [Test]
+        public async Task MergedTest()
         {
             IOperationController controller = new OperationController();
 
@@ -78,36 +156,36 @@ namespace TsOperationHistory.Test
 
             //Age = 30
             controller.ExecuteSetProperty(person,nameof(Person.Age),30);
-            Assert.Equal(30, person.Age );
+            Assert.AreEqual(30, person.Age );
             
             //10 ms待つ
             await Task.Delay(10);
             
             //Age = 100
             controller.ExecuteSetProperty(person,nameof(Person.Age),100);
-            Assert.Equal(100, person.Age );
+            Assert.AreEqual(100, person.Age );
 
             //100ms 待つ
             await Task.Delay(75);
             
             //Age = 150
             controller.ExecuteSetProperty(person,nameof(Person.Age),150);
-            Assert.Equal(150, person.Age );
+            Assert.AreEqual(150, person.Age );
             
             //Age = 100
             controller.Undo();
-            Assert.Equal(100, person.Age );
+            Assert.AreEqual(100, person.Age );
 
             // マージされているので 30には戻らずそのまま14に戻る
             // Age = 14
             controller.Undo();
-            Assert.Equal(14, person.Age );
+            Assert.AreEqual(14, person.Age );
         }
 
         /// <summary>
         /// リスト操作のテスト
         /// </summary>
-        [Fact]
+        [Test]
         public void ListTest()
         {
             IOperationController controller = new OperationController();
@@ -129,25 +207,25 @@ namespace TsOperationHistory.Test
                     Name = "Child2"
                 });
             
-            Assert.Equal(2 , person.Children.Count);
+            Assert.AreEqual(2 , person.Children.Count);
             
             controller.ExecuteRemoveAt(person.Children,0);
-            Assert.Single(person.Children);
+            Assert.That(person.Children.Count, Is.EqualTo(1));
             
             controller.Undo();
-            Assert.Equal(2 , person.Children.Count);
+            Assert.AreEqual(2 , person.Children.Count);
             
             controller.Undo();
-            Assert.Single(person.Children);
-            
+            Assert.That(person.Children.Count, Is.EqualTo(1));
+
             controller.Undo();
-            Assert.Empty(person.Children);
+            Assert.IsEmpty(person.Children);
         }
 
         /// <summary>
         /// PropertyChangedを自動的にOperation化するテスト
         /// </summary>
-        [Fact]
+        [Test]
         public void ObservePropertyChangedTest()
         {
             IOperationController controller = new OperationController();
@@ -169,10 +247,10 @@ namespace TsOperationHistory.Test
                 Assert.True(controller.CanUndo);
             
                 controller.Undo();
-                Assert.Equal("Yammada",person.Name);
+                Assert.AreEqual("Yammada",person.Name);
 
                 controller.Undo();
-                Assert.Equal("First",person.Name);                
+                Assert.AreEqual("First",person.Name);                
             }
 
             // Dispose後は変更通知が自動的にOperationに変更されないことを確認
@@ -182,7 +260,7 @@ namespace TsOperationHistory.Test
                 Assert.False(controller.CanUndo);
 
                 controller.Undo();
-                Assert.Equal("Tanaka",person.Name);
+                Assert.AreEqual("Tanaka",person.Name);
             }
 
             // Ageは自動マージ有効なため1回のUndoで初期値に戻ることを確認
@@ -192,17 +270,17 @@ namespace TsOperationHistory.Test
                     person.Age = i;
                 }
                 
-                Assert.Equal(29,person.Age);
+                Assert.AreEqual(29,person.Age);
                 
                 controller.Undo();
-                Assert.Equal(0,person.Age);
+                Assert.AreEqual(0,person.Age);
                 
                 ageChangedWatcher.Dispose();
             }
         }
         
         
-        [Fact]
+        [Test]
         public void RecorderTest()
         {
             IOperationController controller = new OperationController();
@@ -228,19 +306,101 @@ namespace TsOperationHistory.Test
                 recorder.Current.ExecuteSetProperty(person , nameof(Person.Name) , "Changed");
             }
             // 操作の記録完了
-            recorder.EndRecode("Fixed");
+            recorder.EndRecode();
             
             // 1回のUndoでレコード前のデータが復元される
             controller.Undo();
-            Assert.Equal("Default",person.Name);
-            Assert.Equal(5,person.Age);
-            Assert.Empty(person.Children);
+            Assert.AreEqual("Default",person.Name);
+            Assert.AreEqual(5,person.Age);
+            Assert.IsEmpty(person.Children);
             
             // Redoでレコード終了後のデータが復元される
             controller.Redo();
-            Assert.Equal("Changed",person.Name);
-            Assert.Equal(14,person.Age);
-            Assert.Single(person.Children);
+            Assert.AreEqual("Changed",person.Name);
+            Assert.AreEqual(14,person.Age);
+            Assert.That(person.Children.Count, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void DisposeTest()
+        {
+            IOperationController controller = new OperationController();
+            var person = new Person()
+            {
+                Name = "Venus",
+            };
+
+            controller.Execute(person.GenerateSetPropertyOperation(x => x.Name, "Yamada"));
+            Assert.AreEqual("Yamada", person.Name);
+
+            controller.Execute(person.GenerateSetPropertyOperation(x => x.Name, "Tanaka"));
+            Assert.AreEqual("Tanaka", person.Name);
+
+            controller.ExecuteDispose(person, () => person.Restore(() => person.Name = "Tanaka"));
+            Assert.That(person.Name, Is.Null);
+
+            controller.Undo();
+            Assert.AreEqual("Tanaka", person.Name);
+
+            controller.Undo();
+            Assert.AreEqual("Yamada", person.Name);
+
+            controller.Undo();
+            Assert.AreEqual("Venus", person.Name);
+        }
+
+        [Test]
+        public async Task MultiLayeredPropertyTest()
+        {
+            IOperationController controller = new OperationController();
+            var person = new Person();
+            person.RP.Value = "Value1";
+
+            // デフォルトのマージ時間を 70msに設定
+            Operation.DefaultMergeSpan = TimeSpan.FromMilliseconds(70);
+
+            //75ms 待つ
+            await Task.Delay(75);
+
+            controller.ExecuteSetProperty(person, "RP.Value", "Value2");
+            Assert.AreEqual("Value2", person.RP.Value);
+
+            //75ms 待つ
+            await Task.Delay(75);
+
+            controller.ExecuteSetProperty(person, "RP.Value", "Value3");
+            Assert.AreEqual("Value3", person.RP.Value);
+
+            controller.Undo();
+            Assert.AreEqual("Value2", person.RP.Value);
+
+            controller.Undo();
+            Assert.AreEqual("Value1", person.RP.Value);
+
+            Assert.That(controller.CanUndo, Is.False);
+        }
+
+        [Test]
+        public void MultiLayeredPropertyTest2()
+        {
+            IOperationController controller = new OperationController();
+            var person = new Person();
+            person.RP.Value = "Value1";
+
+            using (var watcher = controller.BindPropertyChanged<string>(person, "RP.Value", false))
+            {
+                person.RP.Value = "Value2";
+
+                person.RP.Value = "Value3";
+
+                controller.Undo();
+                Assert.AreEqual("Value2", person.RP.Value);
+
+                controller.Undo();
+                Assert.AreEqual("Value1", person.RP.Value);
+            }
+
+            Assert.That(controller.CanUndo, Is.False);
         }
     }
 }

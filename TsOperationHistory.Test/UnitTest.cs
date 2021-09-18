@@ -11,6 +11,12 @@ namespace TsOperationHistory.Test
     {
         private string _name;
 
+        public Person()
+        {
+        }
+
+        public static string StaticValue { get; set; }
+
         public string Name
         {
             get => _name;
@@ -103,6 +109,36 @@ namespace TsOperationHistory.Test
         }
 
         /// <summary>
+        /// スタティックプロパティのUndoRedoのテスト
+        /// </summary>
+        [Test]
+        public async Task StaticPropertyTest()
+        {
+            IOperationController controller = new OperationController();
+
+            // デフォルトのマージ時間を 70msに設定
+            Operation.DefaultMergeSpan = TimeSpan.FromMilliseconds(70);
+
+            Person.StaticValue = "Geso";
+
+            controller.ExecuteSetStaticProperty(typeof(Person), "StaticValue", "ika");
+            Assert.AreEqual("ika", Person.StaticValue);
+
+            await Task.Delay(75);
+
+            controller.ExecuteSetStaticProperty(typeof(Person), "StaticValue", "tako");
+            Assert.AreEqual("tako", Person.StaticValue);
+
+            await Task.Delay(75);
+
+            controller.Undo();
+            Assert.AreEqual("ika", Person.StaticValue);
+
+            controller.Undo();
+            Assert.AreEqual("Geso", Person.StaticValue);
+        }
+
+        /// <summary>
         /// Operationの自動結合テスト
         /// </summary>
         [Test]
@@ -119,31 +155,31 @@ namespace TsOperationHistory.Test
             Operation.DefaultMergeSpan = TimeSpan.FromMilliseconds(70);
 
             //Age = 30
-            controller.ExecuteSetProperty(person, nameof(Person.Age), 30);
-            Assert.AreEqual(30, person.Age);
-
+            controller.ExecuteSetProperty(person,nameof(Person.Age),30);
+            Assert.AreEqual(30, person.Age );
+            
             //10 ms待つ
             await Task.Delay(10);
-
+            
             //Age = 100
-            controller.ExecuteSetProperty(person, nameof(Person.Age), 100);
-            Assert.AreEqual(100, person.Age);
+            controller.ExecuteSetProperty(person,nameof(Person.Age),100);
+            Assert.AreEqual(100, person.Age );
 
             //100ms 待つ
             await Task.Delay(75);
-
+            
             //Age = 150
-            controller.ExecuteSetProperty(person, nameof(Person.Age), 150);
-            Assert.AreEqual(150, person.Age);
-
+            controller.ExecuteSetProperty(person,nameof(Person.Age),150);
+            Assert.AreEqual(150, person.Age );
+            
             //Age = 100
             controller.Undo();
-            Assert.AreEqual(100, person.Age);
+            Assert.AreEqual(100, person.Age );
 
             // マージされているので 30には戻らずそのまま14に戻る
             // Age = 14
             controller.Undo();
-            Assert.AreEqual(14, person.Age);
+            Assert.AreEqual(14, person.Age );
         }
 
         /// <summary>
@@ -156,29 +192,29 @@ namespace TsOperationHistory.Test
 
             var person = new Person()
             {
-                Name = "Root"
+               Name = "Root"
             };
-
-            controller.ExecuteAdd(person.Children,
+            
+            controller.ExecuteAdd(person.Children , 
                 new Person()
                 {
                     Name = "Child1"
                 });
-
-            controller.ExecuteAdd(person.Children,
+            
+            controller.ExecuteAdd(person.Children , 
                 new Person()
                 {
                     Name = "Child2"
                 });
-
-            Assert.AreEqual(2, person.Children.Count);
-
-            controller.ExecuteRemoveAt(person.Children, 0);
+            
+            Assert.AreEqual(2 , person.Children.Count);
+            
+            controller.ExecuteRemoveAt(person.Children,0);
             Assert.That(person.Children.Count, Is.EqualTo(1));
-
+            
             controller.Undo();
-            Assert.AreEqual(2, person.Children.Count);
-
+            Assert.AreEqual(2 , person.Children.Count);
+            
             controller.Undo();
             Assert.That(person.Children.Count, Is.EqualTo(1));
 
@@ -193,28 +229,28 @@ namespace TsOperationHistory.Test
         public void ObservePropertyChangedTest()
         {
             IOperationController controller = new OperationController();
-
+            
             var person = new Person()
             {
                 Name = "First",
                 Age = 0,
             };
 
-            var nameChangedWatcher = controller.BindPropertyChanged<string>(person, nameof(Person.Name), false);
+            var nameChangedWatcher = controller.BindPropertyChanged<string>(person, nameof(Person.Name),false);
             var ageChangedWatcher = controller.BindPropertyChanged<int>(person, nameof(Person.Age));
 
             // 変更通知から自動的に Undo / Redo が可能なOperationをスタックに積む
             {
                 person.Name = "Yammada";
                 person.Name = "Tanaka";
-
+            
                 Assert.True(controller.CanUndo);
+            
+                controller.Undo();
+                Assert.AreEqual("Yammada",person.Name);
 
                 controller.Undo();
-                Assert.AreEqual("Yammada", person.Name);
-
-                controller.Undo();
-                Assert.AreEqual("First", person.Name);
+                Assert.AreEqual("First",person.Name);                
             }
 
             // Dispose後は変更通知が自動的にOperationに変更されないことを確認
@@ -224,7 +260,7 @@ namespace TsOperationHistory.Test
                 Assert.False(controller.CanUndo);
 
                 controller.Undo();
-                Assert.AreEqual("Tanaka", person.Name);
+                Assert.AreEqual("Tanaka",person.Name);
             }
 
             // Ageは自動マージ有効なため1回のUndoで初期値に戻ることを確認
@@ -233,55 +269,55 @@ namespace TsOperationHistory.Test
                 {
                     person.Age = i;
                 }
-
-                Assert.AreEqual(29, person.Age);
-
+                
+                Assert.AreEqual(29,person.Age);
+                
                 controller.Undo();
-                Assert.AreEqual(0, person.Age);
-
+                Assert.AreEqual(0,person.Age);
+                
                 ageChangedWatcher.Dispose();
             }
         }
-
-
+        
+        
         [Test]
         public void RecorderTest()
         {
             IOperationController controller = new OperationController();
-
+            
             var person = new Person()
             {
                 Name = "Default",
                 Age = 5,
             };
-
+            
             var recorder = new OperationRecorder(controller);
-
+            
             // 操作の記録開始
             recorder.BeginRecode();
             {
-                recorder.Current.ExecuteAdd(person.Children, new Person()
+                recorder.Current.ExecuteAdd(person.Children,new Person()
                 {
                     Name = "Child1",
                 });
-
-                recorder.Current.ExecuteSetProperty(person, nameof(Person.Age), 14);
-
-                recorder.Current.ExecuteSetProperty(person, nameof(Person.Name), "Changed");
+            
+                recorder.Current.ExecuteSetProperty(person , nameof(Person.Age) , 14);
+            
+                recorder.Current.ExecuteSetProperty(person , nameof(Person.Name) , "Changed");
             }
             // 操作の記録完了
-            recorder.EndRecode("Fixed");
-
+            recorder.EndRecode();
+            
             // 1回のUndoでレコード前のデータが復元される
             controller.Undo();
-            Assert.AreEqual("Default", person.Name);
-            Assert.AreEqual(5, person.Age);
+            Assert.AreEqual("Default",person.Name);
+            Assert.AreEqual(5,person.Age);
             Assert.IsEmpty(person.Children);
-
+            
             // Redoでレコード終了後のデータが復元される
             controller.Redo();
-            Assert.AreEqual("Changed", person.Name);
-            Assert.AreEqual(14, person.Age);
+            Assert.AreEqual("Changed",person.Name);
+            Assert.AreEqual(14,person.Age);
             Assert.That(person.Children.Count, Is.EqualTo(1));
         }
 

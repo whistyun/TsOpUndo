@@ -322,6 +322,45 @@ namespace TsOperationHistory.Test
         }
 
         [Test]
+        public void RecorderTest2()
+        {
+            IOperationController controller = new OperationController();
+
+            var person = new Person()
+            {
+                Name = "Default",
+                Age = 5,
+            };
+
+            // 操作の記録開始
+            using (var recorder = new OperationRecorder(controller).Begin())
+            {
+                recorder.Current.ExecuteAdd(person.Children, new Person()
+                {
+                    Name = "Child1",
+                });
+
+                recorder.Current.ExecuteSetProperty(person, nameof(Person.Age), 14);
+
+                recorder.Current.ExecuteSetProperty(person, nameof(Person.Name), "Changed");
+            }
+
+            // 1回のUndoでレコード前のデータが復元される
+            controller.Undo();
+            Assert.AreEqual("Default", person.Name);
+            Assert.AreEqual(5, person.Age);
+            Assert.IsEmpty(person.Children);
+
+            // Redoでレコード終了後のデータが復元される
+            controller.Redo();
+            Assert.AreEqual("Changed", person.Name);
+            Assert.AreEqual(14, person.Age);
+            Assert.That(person.Children.Count, Is.EqualTo(1));
+        }
+
+
+
+        [Test]
         public void DisposeTest()
         {
             IOperationController controller = new OperationController();

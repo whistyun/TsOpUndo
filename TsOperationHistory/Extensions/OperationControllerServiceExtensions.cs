@@ -14,31 +14,31 @@ namespace TsOperationHistory.Extensions
             var operation = list.ToAddOperation(value);
             controller.Execute(operation);
         }
-        
-        public static void ExecuteInsert<T>(this IOperationController controller, IList<T> list, T value , int index)
+
+        public static void ExecuteInsert<T>(this IOperationController controller, IList<T> list, T value, int index)
         {
-            var operation = new InsertOperation<T>(@list, value , index);
+            var operation = new InsertOperation<T>(@list, value, index);
             controller.Execute(operation);
         }
-        
-        public static void ExecuteAddRange<T>(this IOperationController controller, IList<T> list, IEnumerable<T> value )
+
+        public static void ExecuteAddRange<T>(this IOperationController controller, IList<T> list, IEnumerable<T> value)
         {
             var operation = list.ToAddRangeOperation(value);
             controller.Execute(operation);
         }
-        
+
         public static void ExecuteRemove<T>(this IOperationController controller, IList<T> list, T value)
         {
             var operation = list.ToRemoveOperation(value);
             controller.Execute(operation);
         }
-        
+
         public static void ExecuteRemoveAt<T>(this IOperationController controller, IList<T> list, int index)
         {
             if (list is IList iList)
             {
                 var operation = iList.ToRemoveAtOperation(index);
-                controller.Execute(operation);                
+                controller.Execute(operation);
             }
             else
             {
@@ -47,8 +47,8 @@ namespace TsOperationHistory.Extensions
                 controller.Execute(operation);
             }
         }
-        
-        public static void ExecuteRemoveItems<T>(this IOperationController controller, IList<T> list, IEnumerable<T> value )
+
+        public static void ExecuteRemoveItems<T>(this IOperationController controller, IList<T> list, IEnumerable<T> value)
         {
             var operation = list.ToRemoveRangeOperation(value);
             controller.Execute(operation);
@@ -59,7 +59,7 @@ namespace TsOperationHistory.Extensions
             var operation = owner
                 .GenerateSetPropertyOperation(propertyName, value)
                 .Merge(controller);
-            
+
             controller.Execute(operation);
         }
 
@@ -87,85 +87,56 @@ namespace TsOperationHistory.Extensions
             controller.Execute(operation);
         }
 
-        public static IDisposable BindPropertyChanged<T>(this IOperationController controller , INotifyPropertyChanged owner, string propertyName , bool autoMerge = true)
+
+
+        public static IDisposable BindPropertyChanged<T>(this IOperationController controller, INotifyPropertyChanged owner, string propertyName, bool autoMerge = true)
         {
-            if (propertyName.IndexOf(".") != -1)
+            INotifyPropertyChanged obj;
+            T prevVal;
+            string propNm;
+
+            if (propertyName.Contains("."))
             {
-                INotifyPropertyChanged intermediateValue;
-                T prevValue;
-                string bottomLayerPropertyName;
-                
-                DescendentPropertyNameChain(owner, propertyName, out intermediateValue, out prevValue, out bottomLayerPropertyName);
-
-                var callFromOperation = false;
-                intermediateValue.PropertyChanged += PropertyChanged;
-
-                return new Disposer(() => owner.PropertyChanged -= PropertyChanged);
-
-                // local function
-                void PropertyChanged(object sender, PropertyChangedEventArgs args)
-                {
-                    if (callFromOperation)
-                        return;
-
-                    if (args.PropertyName == bottomLayerPropertyName)
-                    {
-                        callFromOperation = true;
-                        T newValue = FastReflection.GetProperty<T>(owner, propertyName);
-                        var operation = owner
-                            .GenerateAutoMergeOperation(propertyName, newValue, prevValue, $"{sender.GetHashCode()}.{propertyName}", Operation.DefaultMergeSpan);
-
-                        if (autoMerge)
-                        {
-                            operation = operation.Merge(controller);
-                        }
-
-                        operation
-                            .AddPreEvent(() => callFromOperation = true)
-                            .AddPostEvent(() => callFromOperation = false);
-
-                        prevValue = newValue;
-
-                        controller.Push(operation);
-                        callFromOperation = false;
-                    }
-                }
+                DescendentPropertyNameChain(owner, propertyName, out obj, out prevVal, out propNm);
             }
             else
             {
-                var prevValue = FastReflection.GetProperty<T>(owner, propertyName);
-                var callFromOperation = false;
-                owner.PropertyChanged += PropertyChanged;
+                obj = owner;
+                prevVal = FastReflection.GetProperty<T>(owner, propertyName);
+                propNm = propertyName;
+            }
 
-                return new Disposer(() => owner.PropertyChanged -= PropertyChanged);
+            var callFromOperation = false;
+            obj.PropertyChanged += PropertyChanged;
 
-                // local function
-                void PropertyChanged(object sender, PropertyChangedEventArgs args)
+            return new Disposer(() => owner.PropertyChanged -= PropertyChanged);
+
+            // local function
+            void PropertyChanged(object sender, PropertyChangedEventArgs args)
+            {
+                if (callFromOperation)
+                    return;
+
+                if (args.PropertyName == propNm)
                 {
-                    if (callFromOperation)
-                        return;
+                    callFromOperation = true;
+                    T newValue = FastReflection.GetProperty<T>(owner, propertyName);
+                    var operation = owner
+                        .GenerateAutoMergeOperation(propertyName, newValue, prevVal, $"{sender.GetHashCode()}.{propertyName}", Operation.DefaultMergeSpan);
 
-                    if (args.PropertyName == propertyName)
+                    if (autoMerge)
                     {
-                        callFromOperation = true;
-                        T newValue = FastReflection.GetProperty<T>(owner, propertyName);
-                        var operation = owner
-                            .GenerateAutoMergeOperation(propertyName, newValue, prevValue, $"{sender.GetHashCode()}.{propertyName}", Operation.DefaultMergeSpan);
-
-                        if (autoMerge)
-                        {
-                            operation = operation.Merge(controller);
-                        }
-
-                        operation
-                            .AddPreEvent(() => callFromOperation = true)
-                            .AddPostEvent(() => callFromOperation = false);
-
-                        prevValue = newValue;
-
-                        controller.Push(operation);
-                        callFromOperation = false;
+                        operation = operation.Merge(controller);
                     }
+
+                    operation
+                        .AddPreEvent(() => callFromOperation = true)
+                        .AddPostEvent(() => callFromOperation = false);
+
+                    prevVal = newValue;
+
+                    controller.Push(operation);
+                    callFromOperation = false;
                 }
             }
         }

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -21,12 +22,12 @@ namespace TsOperationHistory
             }
         }
 
-        public OperationRecorder() 
+        public OperationRecorder()
             : this(new OperationController(1024))
         {
-            
+
         }
-        
+
         public OperationRecorder(IOperationController controller)
         {
             _root = controller;
@@ -48,6 +49,38 @@ namespace TsOperationHistory
             var operation = controller.Operations.ToCompositeOperation();
             operation.Message = message;
             Current.Push(operation);
+        }
+
+        public DisposableRecorder Begin([CallerMemberName] string callerMemberName = "")
+        {
+            return new DisposableRecorder(this);
+        }
+
+        public class DisposableRecorder : IDisposable
+        {
+            private bool IsDisposed = false;
+            OperationRecorder Owner { get; }
+
+            public IOperationController Current
+            {
+                get => Owner.Current;
+            }
+
+            public DisposableRecorder(OperationRecorder owner)
+            {
+                Owner = owner;
+                Owner.BeginRecode();
+            }
+
+            ~DisposableRecorder() => Dispose();
+
+            public void Dispose()
+            {
+                if (IsDisposed) return;
+
+                IsDisposed = true;
+                Owner.EndRecode();
+            }
         }
     }
 }

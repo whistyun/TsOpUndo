@@ -366,6 +366,13 @@ namespace TsOperationHistory.Test
 
                 controller.Undo();
                 Assert.AreEqual("First", person.Name);
+
+                person.Name = "Yamaguchi";
+                person.Name = "Taniguchi";
+                controller.Undo();
+                Assert.AreEqual("Yamaguchi", person.Name);
+                controller.Undo();
+                Assert.AreEqual("First", person.Name);
             }
             {
                 person.Partner.Name = "Sato";

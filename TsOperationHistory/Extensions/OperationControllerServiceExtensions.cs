@@ -147,28 +147,27 @@ namespace TsOperationHistory.Extensions
             // local function
             void PropertyChanged(object sender, PropertyChangedEventArgs args)
             {
-                if (callFromOperation)
-                    return;
-
                 if (args.PropertyName == propNm)
                 {
-                    callFromOperation = true;
                     T newValue = FastReflection.GetProperty<T>(owner, propertyName);
+
+                    if (callFromOperation)
+                    {
+                        prevVal = newValue;
+                        return;
+                    }
+
+                    callFromOperation = true;
                     var operation = owner
                         .GenerateAutoMergeOperation(
                             propertyName, newValue, prevVal,
                             new PropertyBindKey(sender, propertyName),
                             Operation.DefaultMergeSpan);
 
-
                     if (autoMerge)
                     {
                         operation = operation.Merge(controller);
                     }
-
-                    operation
-                        .AddPreEvent(() => callFromOperation = true)
-                        .AddPostEvent(() => callFromOperation = false);
 
                     prevVal = newValue;
 

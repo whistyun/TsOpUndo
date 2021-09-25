@@ -89,7 +89,7 @@ namespace TsOperationHistory.Extensions
             var nullableObj = FastReflection.GetProperty(@this, propertyName);
             TProperty oldValue = nullableObj != null ? (TProperty)nullableObj : default(TProperty);
 
-            return GenerateAutoMergeOperation(@this, propertyName, newValue, oldValue, $"{@this.GetHashCode()}.{propertyName}", timeSpan);
+            return GenerateAutoMergeOperation(@this, propertyName, newValue, oldValue, new PropertyBindKey(@this, propertyName), timeSpan);
         }
 
         public static IMergeableOperation GenerateSetStaticPropertyOperation<TProperty>(this Type @class, string propertyName, TProperty newValue, TimeSpan timeSpan)
@@ -336,6 +336,32 @@ namespace TsOperationHistory.Extensions
             }
 
             return list;
+        }
+    }
+    class PropertyBindKey
+    {
+
+        public object Object { get; }
+        public string PropertyName { get; }
+
+        public PropertyBindKey(object @object, string propertyName)
+        {
+            Object = @object;
+            PropertyName = propertyName;
+        }
+
+        public override int GetHashCode()
+        {
+            return PropertyName.GetHashCode();
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj is PropertyBindKey key)
+            {
+                return Object.ReferenceEquals(Object, key.Object) && PropertyName == key.PropertyName;
+            }
+            return false;
         }
     }
 }

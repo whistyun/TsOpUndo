@@ -155,7 +155,11 @@ namespace TsOperationHistory.Extensions
                     callFromOperation = true;
                     T newValue = FastReflection.GetProperty<T>(owner, propertyName);
                     var operation = owner
-                        .GenerateAutoMergeOperation(propertyName, newValue, prevVal, $"{sender.GetHashCode()}.{propertyName}", Operation.DefaultMergeSpan);
+                        .GenerateAutoMergeOperation(
+                            propertyName, newValue, prevVal,
+                            new PropertyBindKey(sender, propertyName),
+                            Operation.DefaultMergeSpan);
+
 
                     if (autoMerge)
                     {

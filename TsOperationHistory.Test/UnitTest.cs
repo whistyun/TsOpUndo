@@ -87,6 +87,20 @@ namespace TsOperationHistory.Test
             restorePropertiesAction.Invoke();
             GC.ReRegisterForFinalize(this);
         }
+
+        public override int GetHashCode()
+        {
+            return Age + (Name ?? "").GetHashCode();
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj is Person p)
+            {
+                return Age == p.Age && Name == p.Name;
+            }
+            return false;
+        }
     }
 
     internal class Holder : Bindable

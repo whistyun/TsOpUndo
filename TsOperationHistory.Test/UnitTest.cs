@@ -1,7 +1,9 @@
 ﻿using NUnit.Framework;
 using Reactive.Bindings;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using TsOperationHistory.Extensions;
 
@@ -29,6 +31,13 @@ namespace TsOperationHistory.Test
         {
             get => _age;
             set => SetProperty(ref _age, value);
+        }
+
+        private Person _partner;
+        public Person Partner
+        {
+            get => _partner;
+            set => SetProperty(ref _partner, value);
         }
 
         public ReactivePropertySlim<string> RP { get; set; } = new ReactivePropertySlim<string>();
@@ -77,6 +86,17 @@ namespace TsOperationHistory.Test
 
             restorePropertiesAction.Invoke();
             GC.ReRegisterForFinalize(this);
+        }
+    }
+
+    internal class Holder : Bindable
+    {
+        private ObservableCollection<string> _children = new ObservableCollection<string>();
+
+        public ObservableCollection<string> Children
+        {
+            get => _children;
+            set => SetProperty(ref _children, value);
         }
     }
 
@@ -155,31 +175,31 @@ namespace TsOperationHistory.Test
             Operation.DefaultMergeSpan = TimeSpan.FromMilliseconds(70);
 
             //Age = 30
-            controller.ExecuteSetProperty(person,nameof(Person.Age),30);
-            Assert.AreEqual(30, person.Age );
-            
+            controller.ExecuteSetProperty(person, nameof(Person.Age), 30);
+            Assert.AreEqual(30, person.Age);
+
             //10 ms待つ
             await Task.Delay(10);
-            
+
             //Age = 100
-            controller.ExecuteSetProperty(person,nameof(Person.Age),100);
-            Assert.AreEqual(100, person.Age );
+            controller.ExecuteSetProperty(person, nameof(Person.Age), 100);
+            Assert.AreEqual(100, person.Age);
 
             //100ms 待つ
             await Task.Delay(75);
-            
+
             //Age = 150
-            controller.ExecuteSetProperty(person,nameof(Person.Age),150);
-            Assert.AreEqual(150, person.Age );
-            
+            controller.ExecuteSetProperty(person, nameof(Person.Age), 150);
+            Assert.AreEqual(150, person.Age);
+
             //Age = 100
             controller.Undo();
-            Assert.AreEqual(100, person.Age );
+            Assert.AreEqual(100, person.Age);
 
             // マージされているので 30には戻らずそのまま14に戻る
             // Age = 14
             controller.Undo();
-            Assert.AreEqual(14, person.Age );
+            Assert.AreEqual(14, person.Age);
         }
 
         /// <summary>
@@ -192,34 +212,109 @@ namespace TsOperationHistory.Test
 
             var person = new Person()
             {
-               Name = "Root"
+                Name = "Root"
             };
-            
-            controller.ExecuteAdd(person.Children , 
+
+            controller.ExecuteAdd(person.Children,
                 new Person()
                 {
                     Name = "Child1"
                 });
-            
-            controller.ExecuteAdd(person.Children , 
+
+            controller.ExecuteAdd(person.Children,
                 new Person()
                 {
                     Name = "Child2"
                 });
-            
-            Assert.AreEqual(2 , person.Children.Count);
-            
-            controller.ExecuteRemoveAt(person.Children,0);
+
+            Assert.AreEqual(2, person.Children.Count);
+
+            controller.ExecuteRemoveAt(person.Children, 0);
             Assert.That(person.Children.Count, Is.EqualTo(1));
-            
+
             controller.Undo();
-            Assert.AreEqual(2 , person.Children.Count);
-            
+            Assert.AreEqual(2, person.Children.Count);
+
             controller.Undo();
             Assert.That(person.Children.Count, Is.EqualTo(1));
 
             controller.Undo();
             Assert.IsEmpty(person.Children);
+        }
+
+        [Test]
+        public void ObserveCollectionChangedTest()
+        {
+            IOperationController controller = new OperationController();
+
+            var person = new Holder();
+            person.Children.Add("A");
+            person.Children.Add("B");
+            person.Children.Add("C");
+            person.Children.Add("D");
+
+            var watcher = controller.BindListPropertyChanged<ObservableCollection<string>, string>(person, nameof(Person.Children));
+
+            // add
+
+            person.Children.Add("E");
+
+            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D", "E" }, person.Children));
+            controller.Undo();
+            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
+            controller.Redo();
+            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D", "E" }, person.Children));
+            controller.Undo();
+
+            // insert
+
+            person.Children.Insert(2, "E");
+
+            controller.Undo();
+            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
+            controller.Redo();
+            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "E", "C", "D" }, person.Children));
+            controller.Undo();
+
+            // replace
+
+            person.Children[2] = "E";
+
+            controller.Undo();
+            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
+            controller.Redo();
+            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "E", "D" }, person.Children));
+            controller.Undo();
+
+            // remove
+
+            person.Children.RemoveAt(person.Children.Count - 1);
+
+            controller.Undo();
+            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
+            controller.Redo();
+            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C" }, person.Children));
+            controller.Undo();
+
+            // move
+
+            person.Children.Move(0, 3);
+
+            controller.Undo();
+            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
+            controller.Redo();
+            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "B", "C", "D", "A" }, person.Children));
+            controller.Undo();
+
+            // clear
+
+            person.Children.Clear();
+
+            controller.Undo();
+            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
+            controller.Redo();
+            Assert.IsTrue(Enumerable.SequenceEqual(new string[0], person.Children));
+            controller.Undo();
         }
 
         /// <summary>
@@ -229,28 +324,44 @@ namespace TsOperationHistory.Test
         public void ObservePropertyChangedTest()
         {
             IOperationController controller = new OperationController();
-            
+
             var person = new Person()
             {
                 Name = "First",
                 Age = 0,
+                Partner = new Person()
+                {
+                    Name = "Second",
+                    Age = 20,
+                }
             };
 
-            var nameChangedWatcher = controller.BindPropertyChanged<string>(person, nameof(Person.Name),false);
+            var nameChangedWatcher = controller.BindPropertyChanged<string>(person, nameof(Person.Name), false);
             var ageChangedWatcher = controller.BindPropertyChanged<int>(person, nameof(Person.Age));
+            var partnerNameChangedWatcher = controller.BindPropertyChanged<string>(person, nameof(Person.Partner) + "." + nameof(Person.Name), false);
 
             // 変更通知から自動的に Undo / Redo が可能なOperationをスタックに積む
             {
                 person.Name = "Yammada";
                 person.Name = "Tanaka";
-            
+
                 Assert.True(controller.CanUndo);
-            
-                controller.Undo();
-                Assert.AreEqual("Yammada",person.Name);
 
                 controller.Undo();
-                Assert.AreEqual("First",person.Name);                
+                Assert.AreEqual("Yammada", person.Name);
+
+                controller.Undo();
+                Assert.AreEqual("First", person.Name);
+            }
+            {
+                person.Partner.Name = "Sato";
+                person.Partner.Name = "Goto";
+
+                controller.Undo();
+                Assert.AreEqual("Sato", person.Partner.Name);
+
+                controller.Undo();
+                Assert.AreEqual("Second", person.Partner.Name);
             }
 
             // Dispose後は変更通知が自動的にOperationに変更されないことを確認
@@ -260,7 +371,14 @@ namespace TsOperationHistory.Test
                 Assert.False(controller.CanUndo);
 
                 controller.Undo();
-                Assert.AreEqual("Tanaka",person.Name);
+                Assert.AreEqual("Tanaka", person.Name);
+            }
+            {
+                partnerNameChangedWatcher.Dispose();
+                person.Partner.Name = "Goto";
+
+                controller.Undo();
+                Assert.AreEqual("Goto", person.Partner.Name);
             }
 
             // Ageは自動マージ有効なため1回のUndoで初期値に戻ることを確認
@@ -269,55 +387,55 @@ namespace TsOperationHistory.Test
                 {
                     person.Age = i;
                 }
-                
-                Assert.AreEqual(29,person.Age);
-                
+
+                Assert.AreEqual(29, person.Age);
+
                 controller.Undo();
-                Assert.AreEqual(0,person.Age);
-                
+                Assert.AreEqual(0, person.Age);
+
                 ageChangedWatcher.Dispose();
             }
         }
-        
-        
+
+
         [Test]
         public void RecorderTest()
         {
             IOperationController controller = new OperationController();
-            
+
             var person = new Person()
             {
                 Name = "Default",
                 Age = 5,
             };
-            
+
             var recorder = new OperationRecorder(controller);
-            
+
             // 操作の記録開始
             recorder.BeginRecode();
             {
-                recorder.Current.ExecuteAdd(person.Children,new Person()
+                recorder.Current.ExecuteAdd(person.Children, new Person()
                 {
                     Name = "Child1",
                 });
-            
-                recorder.Current.ExecuteSetProperty(person , nameof(Person.Age) , 14);
-            
-                recorder.Current.ExecuteSetProperty(person , nameof(Person.Name) , "Changed");
+
+                recorder.Current.ExecuteSetProperty(person, nameof(Person.Age), 14);
+
+                recorder.Current.ExecuteSetProperty(person, nameof(Person.Name), "Changed");
             }
             // 操作の記録完了
             recorder.EndRecode();
-            
+
             // 1回のUndoでレコード前のデータが復元される
             controller.Undo();
-            Assert.AreEqual("Default",person.Name);
-            Assert.AreEqual(5,person.Age);
+            Assert.AreEqual("Default", person.Name);
+            Assert.AreEqual(5, person.Age);
             Assert.IsEmpty(person.Children);
-            
+
             // Redoでレコード終了後のデータが復元される
             controller.Redo();
-            Assert.AreEqual("Changed",person.Name);
-            Assert.AreEqual(14,person.Age);
+            Assert.AreEqual("Changed", person.Name);
+            Assert.AreEqual(14, person.Age);
             Assert.That(person.Children.Count, Is.EqualTo(1));
         }
 

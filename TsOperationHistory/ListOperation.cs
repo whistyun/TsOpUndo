@@ -22,7 +22,7 @@ namespace TsOperationHistory
             => _list ?? _generator?.Invoke();
 
 
-        public InsertOperation(Func<IList<T>> listGenerator, T insertValue , int insertIndex = -1)
+        public InsertOperation(Func<IList<T>> listGenerator, T insertValue, int insertIndex = -1)
         {
             Debug.Assert(listGenerator != null);
             _generator = listGenerator;
@@ -40,16 +40,16 @@ namespace TsOperationHistory
 
         public void RollForward()
         {
-            if(_insertIndex < 0)
+            if (_insertIndex < 0)
                 get_list().Add(_property);
             else
-                get_list().Insert(_insertIndex,_property);
+                get_list().Insert(_insertIndex, _property);
         }
 
         public void Rollback()
         {
             var list = get_list();
-            list.RemoveAt( _insertIndex < 0 ? list.Count - 1 : _insertIndex );
+            list.RemoveAt(_insertIndex < 0 ? list.Count - 1 : _insertIndex);
         }
     }
 
@@ -68,7 +68,7 @@ namespace TsOperationHistory
 
         private IList<T> get_list()
             => _list ?? _generator?.Invoke();
-        
+
         public RemoveOperation(Func<IList<T>> listGenerator, T removeValue)
         {
             Debug.Assert(listGenerator != null);
@@ -81,6 +81,14 @@ namespace TsOperationHistory
             Debug.Assert(list != null);
             _list = list;
             _property = removeValue;
+        }
+
+        public RemoveOperation(IList<T> list, T removedValue, int valuePosition)
+        {
+            Debug.Assert(list != null);
+            _list = list;
+            _property = removedValue;
+            _insertIndex = valuePosition;
         }
 
         public void RollForward()
@@ -113,7 +121,7 @@ namespace TsOperationHistory
         private readonly Func<IList> _generator;
         private readonly IList _list;
         private object _data;
-        private readonly int _index ;
+        private readonly int _index;
 
         private IList get_list()
             => _list ?? _generator?.Invoke();
@@ -172,6 +180,13 @@ namespace TsOperationHistory
         {
             Debug.Assert(list != null);
             _list = list;
+        }
+
+        public ClearOperation(IList<T> list, T[] prevData)
+        {
+            Debug.Assert(list != null);
+            _list = list;
+            _prevData = prevData;
         }
 
         public void RollForward()

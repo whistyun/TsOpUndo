@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Linq;
+using System.Reflection;
 using TsOperationHistory.Internal;
 
 namespace TsOperationHistory.Extensions
@@ -87,9 +90,37 @@ namespace TsOperationHistory.Extensions
             controller.Execute(operation);
         }
 
+        public static IDisposable BindListPropertyChanged<T, C>(this IOperationController controller, INotifyPropertyChanged owner, string propertyName, bool autoMerge = true, bool disposable = true)
+                where T : IList<C>, INotifyCollectionChanged
+        {
+            INotifyPropertyChanged obj;
+            T prevVal;
+            string propNm;
 
+            if (propertyName.Contains("."))
+            {
+                DescendentPropertyNameChain(owner, propertyName, out obj, out prevVal, out propNm);
+            }
+            else
+            {
+                obj = owner;
+                prevVal = FastReflection.GetProperty<T>(owner, propertyName);
+                propNm = propertyName;
 
-        public static IDisposable BindPropertyChanged<T>(this IOperationController controller, INotifyPropertyChanged owner, string propertyName, bool autoMerge = true)
+            }
+
+            Func<T> getter = () => FastReflection.GetProperty<T>(obj, propNm);
+            var watcher = new ListListner<T, C>(controller, prevVal, propNm, getter);
+
+            obj.PropertyChanged += watcher.PropertyChanged;
+
+            return disposable ?
+                new Disposer(() => watcher.Kill()) :
+                new Disposer(() => { });
+
+        }
+
+        public static IDisposable BindPropertyChanged<T>(this IOperationController controller, INotifyPropertyChanged owner, string propertyName, bool autoMerge = true, bool disposable = true)
         {
             INotifyPropertyChanged obj;
             T prevVal;
@@ -109,7 +140,9 @@ namespace TsOperationHistory.Extensions
             var callFromOperation = false;
             obj.PropertyChanged += PropertyChanged;
 
-            return new Disposer(() => owner.PropertyChanged -= PropertyChanged);
+            return disposable ?
+                new Disposer(() => obj.PropertyChanged -= PropertyChanged) :
+                new Disposer(() => { });
 
             // local function
             void PropertyChanged(object sender, PropertyChangedEventArgs args)
@@ -150,6 +183,103 @@ namespace TsOperationHistory.Extensions
             {
                 DescendentPropertyNameChain<T>(intermediateValue, bottomLayerPropertyName, out intermediateValue, out prevValue, out bottomLayerPropertyName);
             }
+        }
+    }
+
+    class ListListner<T, C> where T : IList<C>, INotifyCollectionChanged
+    {
+        private bool IsAlive = true;
+
+        private IOperationController Controller;
+        private C[] TargetBackup;
+        private T TargetList;
+        private string TargetProperty;
+        private Func<T> Getter;
+        private bool callFromOperation = false;
+        private string PropNm;
+
+        public ListListner(IOperationController controller, T ownerList, string propNm, Func<T> getter)
+        {
+            Controller = controller;
+            Getter = getter;
+            SetTarget(ownerList);
+
+            PropNm = propNm;
+        }
+
+        public void UpdateTarget() => SetTarget(Getter.Invoke());
+
+        public void Kill() => IsAlive = false;
+
+        public void PropertyChanged(object sender, PropertyChangedEventArgs args)
+        {
+            if (!IsAlive) return;
+
+            if (args.PropertyName == PropNm)
+            {
+                UpdateTarget();
+            }
+        }
+
+        public void CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (!IsAlive) return;
+
+            if (callFromOperation)
+            {
+                TargetBackup = TargetList.ToArray();
+                return;
+            }
+
+            IOperation operation;
+            switch (e.Action)
+            {
+                case NotifyCollectionChangedAction.Add:
+                    operation = (e.NewStartingIndex + e.NewItems.Count == TargetList.Count) ?
+                        TargetList.ToAddRangeOperation(e.NewItems.Cast<C>()) :
+                        TargetList.ToInsertRangeOperation(e.NewItems.Cast<C>(), e.NewStartingIndex);
+                    break;
+
+                case NotifyCollectionChangedAction.Remove:
+                    operation = e.OldItems.Cast<C>()
+                                          .Select((x, idx) => new RemoveOperation<C>(TargetList, x, e.OldStartingIndex + idx))
+                                          .ToCompositeOperation();
+                    break;
+
+                case NotifyCollectionChangedAction.Replace:
+                case NotifyCollectionChangedAction.Move:
+                    operation = new[]{
+                            e.OldItems.Cast<C>()
+                                      .Select((x,idx)=> new RemoveOperation<C>(TargetList,x,e.OldStartingIndex+idx ))
+                                      .ToCompositeOperation(),
+                            TargetList.ToInsertRangeOperation(e.NewItems.Cast<C>(), e.NewStartingIndex)
+                        }.ToCompositeOperation();
+                    break;
+
+                case NotifyCollectionChangedAction.Reset:
+                    operation = new ClearOperation<C>(TargetList, TargetBackup);
+                    break;
+
+                default:
+                    throw new InvalidOperationException();
+            }
+
+            operation = operation
+                .AddPreEvent(() => callFromOperation = true)
+                .AddPostEvent(() => callFromOperation = false);
+
+            Controller.Push(operation);
+            TargetBackup = TargetList.ToArray();
+        }
+
+        private void SetTarget(T newOwner)
+        {
+            if (TargetList != null)
+                TargetList.CollectionChanged -= CollectionChanged;
+
+            TargetList = newOwner;
+            TargetBackup = newOwner.ToArray();
+            TargetList.CollectionChanged += CollectionChanged;
         }
     }
 }

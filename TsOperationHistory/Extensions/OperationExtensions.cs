@@ -113,20 +113,20 @@ namespace TsOperationHistory.Extensions
         public static IMergeableOperation GenerateSetPropertyOperation<T, TProperty>(this T @this, Expression<Func<T, TProperty>> selector, TProperty newValue)
         {
             var propertyName = selector.GetMemberName();
-            return GenerateSetPropertyOperation(@this, propertyName, newValue , Operation.DefaultMergeSpan);
+            return GenerateSetPropertyOperation(@this, propertyName, newValue, Operation.DefaultMergeSpan);
         }
-        
+
         public static IMergeableOperation ToOperation<T, TProperty>(this T @this, Expression<Func<T, TProperty>> selector)
         {
             var propertyName = selector.GetMemberName();
             var currentValue = FastReflection.GetProperty<TProperty>(@this, propertyName);
-            return GenerateSetPropertyOperation(@this, propertyName, currentValue , Operation.DefaultMergeSpan);
+            return GenerateSetPropertyOperation(@this, propertyName, currentValue, Operation.DefaultMergeSpan);
         }
 
         /// <summary>
         /// マージ可能なオペレーションを作成する
         /// </summary>
-        public static IMergeableOperation GenerateAutoMergeOperation<TProperty,TMergeKey>(this object @this,string propertyName, TProperty newValue ,TProperty oldValue, TMergeKey mergeKey,TimeSpan timeSpan)
+        public static IMergeableOperation GenerateAutoMergeOperation<TProperty, TMergeKey>(this object @this, string propertyName, TProperty newValue, TProperty oldValue, TMergeKey mergeKey, TimeSpan timeSpan)
         {
             return new MergeableOperation<TProperty>(
                 x => { FastReflection.SetProperty(@this, propertyName, x); },
@@ -198,8 +198,8 @@ namespace TsOperationHistory.Extensions
             if (@this == Operation.Empty)
                 return true;
             if (@this is CompositeOperation compositeOperation)
-                return compositeOperation.Operations.Any() is false 
-                    || compositeOperation.GetAllOperation().All(x=>x.IsEmpty());
+                return compositeOperation.Operations.Any() is false
+                    || compositeOperation.GetAllOperation().All(x => x.IsEmpty());
             return false;
         }
 
@@ -235,6 +235,12 @@ namespace TsOperationHistory.Extensions
             => new InsertOperation<T>(@this, value);
 
         /// <summary>
+        /// 値の挿入オペレーションを作成する
+        /// </summary>
+        public static IOperation ToInsertOperation<T>(this IList<T> @this, T value, int index)
+            => new InsertOperation<T>(@this, value, index);
+
+        /// <summary>
         /// 値の削除オペレーションを作成する
         /// </summary>
         public static IOperation ToRemoveOperation<T>(this IList<T> @this, T value)
@@ -258,6 +264,14 @@ namespace TsOperationHistory.Extensions
                 .Select(x => new InsertOperation<T>(@this, x))
                 .ToCompositeOperation();
         }
+
+        public static IOperation ToInsertRangeOperation<T>(this IList<T> @this, IEnumerable<T> values, int idx)
+        {
+            return values
+                .Select((x, apnd) => new InsertOperation<T>(@this, x, idx + apnd))
+                .ToCompositeOperation();
+        }
+
 
         /// <summary>
         /// 値の複数削除オペレーションを作成する

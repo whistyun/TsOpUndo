@@ -40,16 +40,41 @@ namespace TsOpUndo.Operations
         /// このキーの値が同値の場合、マージ可能と判断されます。
         /// </remarks>
         object GetMergeKey();
+
+        Action[] RegisteredPreEvents { get; }
+        Action[] RegisteredPostEvents { get; }
     }
 
     public abstract class AbstractMergeableOperation : IMergeableOperation
     {
+        private object _mergeKey;
+        private List<Action> _RegisteredPreEvents = new List<Action>();
+        private List<Action> _RegisteredPostEvents = new List<Action>();
+
         public string Message { get; set; }
 
-        public event Action PreEvent;
-        public event Action PostEvent;
+        public event Action PreEvent
+        {
+            add => _RegisteredPreEvents.Add(value);
+            remove => _RegisteredPreEvents.Remove(value);
+        }
 
-        private object _mergeKey;
+        public event Action PostEvent
+        {
+            add => _RegisteredPostEvents.Add(value);
+            remove => _RegisteredPostEvents.Remove(value);
+        }
+
+        public Action[] RegisteredPreEvents
+        {
+            get => _RegisteredPreEvents.ToArray();
+        }
+
+        public Action[] RegisteredPostEvents
+        {
+            get => _RegisteredPostEvents.ToArray();
+        }
+
 
         public AbstractMergeableOperation(object mergeKey)
         {
@@ -60,12 +85,12 @@ namespace TsOpUndo.Operations
         {
             try
             {
-                PreEvent?.Invoke();
+                InvokePreEvent();
                 DoRollback();
             }
             finally
             {
-                PostEvent?.Invoke();
+                InvokePostEvent();
             }
         }
 
@@ -73,21 +98,34 @@ namespace TsOpUndo.Operations
         {
             try
             {
-                PreEvent?.Invoke();
+                InvokePreEvent();
                 DoRollForward();
             }
             finally
             {
-                PostEvent?.Invoke();
+                InvokePostEvent();
             }
         }
 
         public object GetMergeKey() => _mergeKey;
 
+        private void InvokePreEvent() => _RegisteredPreEvents.ForEach(e => e.Invoke());
+        private void InvokePostEvent() => _RegisteredPostEvents.ForEach(e => e.Invoke());
+
         protected abstract void DoRollback();
         protected abstract void DoRollForward();
+        protected abstract void DoMerge(IMergeableOperation nextOperation);
 
         public abstract bool CanMerge(IMergeableOperation operation);
-        public abstract void Merge(IMergeableOperation nextOperation);
+        public virtual void Merge(IMergeableOperation nextOperation)
+        {
+            if (!CanMerge(nextOperation))
+                throw new ArgumentException($"{nextOperation} can not be merged");
+
+            _RegisteredPreEvents.AddRange(nextOperation.RegisteredPreEvents);
+            _RegisteredPostEvents.InsertRange(0, nextOperation.RegisteredPostEvents);
+
+            DoMerge(nextOperation);
+        }
     }
 }

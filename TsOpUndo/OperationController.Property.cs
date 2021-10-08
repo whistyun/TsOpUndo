@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading.Tasks;
 using TsOpUndo.Internal;
 using TsOpUndo.Internal.Accessors;
+using TsOpUndo.Internal.Listeners;
 using TsOpUndo.Internal.Operations;
 using TsOpUndo.Operations;
 
@@ -75,41 +76,14 @@ namespace TsOpUndo
                 propNm = propertyName;
             }
 
-            var callFromOperation = false;
-            obj.PropertyChanged += PropertyChanged;
-
-            return new Cancellable(() => obj.PropertyChanged -= PropertyChanged);
-
-            // local function
-            void PropertyChanged(object sender, PropertyChangedEventArgs args)
-            {
-                if (args.PropertyName == propNm)
-                {
-                    object newValue = FastReflection.GetProperty<object>(obj, propNm);
-
-                    if (callFromOperation)
-                    {
-                        prevVal = newValue;
-                        return;
-                    }
-
-                    var operation = new PropertyOperation(obj, propNm, prevVal, newValue);
-                    operation.PreEvent += () => callFromOperation = true; ;
-                    operation.PostEvent += () => callFromOperation = false;
-
-                    prevVal = newValue;
-
-                    if (autoMerge)
-                    {
-                        Push(operation);
-                    }
-                    else
-                    {
-                        PushWithoutMerge(operation);
-                    }
-                }
-            }
+            return new PropertyListeners(this, obj, propNm, prevVal, autoMerge);
         }
+
+        public ICancellable BindPropertyChanged2(INotifyPropertyChanged2 owner)
+        {
+            return new ObjectListener(this, owner);
+        }
+
 
         public ICancellable BindListPropertyChanged(
                 INotifyPropertyChanged owner,
@@ -139,16 +113,12 @@ namespace TsOpUndo
             }
 
             Func<IList> getter;
-
-
             if (typeof(IList).IsAssignableFrom(valAccessor.PropertyType))
             {
                 // is ICollection
                 getter = () => (IList)valAccessor.GetValue(obj);
             }
-            else if (valAccessor.PropertyType.FindInterfaces(
-                     (t, c) => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(IList<>),
-                     null).Length > 0)
+            else if (valAccessor.PropertyType.HasInterface(typeof(IList<>)))
             {
                 // is ICollection<>
                 prevVal = new ListWrapper(prevVal);
@@ -159,13 +129,7 @@ namespace TsOpUndo
                 throw new ArgumentException("${propertyName} is neither IList nor IList<>.");
             }
 
-
-            var watcher = new ListListener(this, (IList)prevVal, propNm, getter);
-
-            obj.PropertyChanged += watcher.PropertyChanged;
-
-            return watcher;
-
+            return new ListListener(this, owner, (IList)prevVal, propNm, getter);
         }
 
         private static void DescendentPropertyNameChain<T>(

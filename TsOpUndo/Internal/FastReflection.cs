@@ -151,5 +151,24 @@ namespace TsOpUndo.Internal
             IAccessor accessor = GetAccessor(_object, propertyName);
             return (T)accessor.GetValue(_object);
         }
+
+        public static bool HasInterface<T>(this Type type) => HasInterface(type, typeof(T));
+
+        public static bool HasInterface<T>(this Type type, out Type filteredType) => HasInterface(type, typeof(T), out filteredType);
+
+        public static bool HasInterface(this Type type, Type checkType) => HasInterface(type, checkType, out var _);
+
+        public static bool HasInterface(this Type type, Type checkType, out Type filteredType)
+        {
+            TypeFilter filter;
+            if (checkType.IsGenericType)
+                filter = (t, c) => t.IsGenericType && t.GetGenericTypeDefinition() == checkType;
+            else
+                filter = (t, c) => t == checkType;
+
+            filteredType = type.FindInterfaces(filter, null).FirstOrDefault();
+
+            return filteredType != null;
+        }
     }
 }

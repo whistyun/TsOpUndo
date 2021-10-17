@@ -95,3 +95,19 @@ Assert.AreEqual(3, controller.Undos.Count());
 hiperson.Age = 14;
 Assert.AreEqual(4, controller.Undos.Count());
 ```
+
+# Nuget
+https://www.nuget.org/packages/TsOpUndo/
+
+# Development
+
+IDE: Visual Studio 2019  
+
+## Build
+
+1. Clone the repository
+   ```cmd
+   git clone https://github.com/whistyun/TsOpUndo.git
+   ```
+
+2. If you use VisualStudio, open TsOpUndo.git.

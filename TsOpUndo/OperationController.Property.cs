@@ -84,6 +84,10 @@ namespace TsOpUndo
             return new ObjectListener(this, owner);
         }
 
+        public ICancellable BindPropertyChanged2Fast(INotifyPropertyChanged2 owner)
+        {
+            return new FastObjectListener(this, owner);
+        }
 
         public ICancellable BindListPropertyChanged(
                 INotifyPropertyChanged owner,
@@ -129,7 +133,7 @@ namespace TsOpUndo
                 throw new ArgumentException("${propertyName} is neither IList nor IList<>.");
             }
 
-            return new ListListener(this, owner, (IList)prevVal, propNm, getter);
+            return new PropertyListListener(this, owner, (IList)prevVal, propNm, getter);
         }
 
         private static void DescendentPropertyNameChain<T>(

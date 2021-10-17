@@ -46,7 +46,7 @@ namespace TsOpUndo
 
             var ev = new PropertyChangedEvent2Args(propertyName, oldValue, newValue);
             PropertyChanged2?.Invoke(this, ev);
-            PropertyChanged.Invoke(this, ev);
+            PropertyChanged?.Invoke(this, ev);
 
             return true;
         }

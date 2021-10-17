@@ -151,5 +151,54 @@ namespace TsOpUndo.Internal
             IAccessor accessor = GetAccessor(_object, propertyName);
             return (T)accessor.GetValue(_object);
         }
+
+        public static bool TryGetValue<T>(object obj, string propertyPath, out T outVal)
+        {
+            object val = obj;
+
+            foreach (var propertyNameSplit in propertyPath.Replace("[", ".[").Split('.'))
+            {
+                var p = propertyNameSplit;
+                if (p.First() == '[')
+                {
+                    p = "Item";
+                    var index = int.Parse(propertyNameSplit.Replace("[", "").Replace("]", ""));
+                    val = CreateIAccessorWithIndex(val, p).GetValue(val, index);
+                }
+                else
+                {
+                    val = CreateIAccessor(val, p).GetValue(val);
+                }
+
+
+                if (val is null)
+                {
+                    outVal = default(T);
+                    return false;
+                }
+            }
+
+            outVal = (T)val;
+            return true;
+        }
+
+        public static bool HasInterface<T>(this Type type) => HasInterface(type, typeof(T));
+
+        public static bool HasInterface<T>(this Type type, out Type filteredType) => HasInterface(type, typeof(T), out filteredType);
+
+        public static bool HasInterface(this Type type, Type checkType) => HasInterface(type, checkType, out var _);
+
+        public static bool HasInterface(this Type type, Type checkType, out Type filteredType)
+        {
+            TypeFilter filter;
+            if (checkType.IsGenericType)
+                filter = (t, c) => t.IsGenericType && t.GetGenericTypeDefinition() == checkType;
+            else
+                filter = (t, c) => t == checkType;
+
+            filteredType = type.FindInterfaces(filter, null).FirstOrDefault();
+
+            return filteredType != null;
+        }
     }
 }

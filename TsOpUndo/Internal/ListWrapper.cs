@@ -13,7 +13,6 @@ namespace TsOpUndo.Internal
     {
         private object list;
         private INotifyCollectionChanged listNotify;
-        private Type faceType;
 
         private PropertyInfo indexerProp;
         private PropertyInfo isReadOnlyProp;
@@ -33,23 +32,32 @@ namespace TsOpUndo.Internal
         {
             this.list = list;
             this.listNotify = (INotifyCollectionChanged)list;
-            this.faceType = list.GetType()
-                                .FindInterfaces((t, c) => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(IList<>), null)
-                                .First();
 
-            indexerProp = faceType.GetProperties().Where(p => p.GetIndexParameters().Length == 1).First();
+            var type = list.GetType();
 
-            isReadOnlyProp = faceType.GetProperty(nameof(IList<object>.IsReadOnly));
-            countProp = faceType.GetProperty(nameof(IList<object>.Count));
+            if (!type.HasInterface(typeof(IList<>), out var listType)
+            || !type.HasInterface(typeof(ICollection<>), out var collectionType)
+            || !type.HasInterface(typeof(IEnumerable), out var enumerableType))
+            {
+                throw new InvalidCastException($"{nameof(list)} should be IList<>");
+            }
 
-            addMethod = faceType.GetMethod(nameof(List<int>.Add));
-            clearMethod = faceType.GetMethod(nameof(List<int>.Clear));
-            containsMethod = faceType.GetMethod(nameof(List<int>.Contains));
-            getEnumeratorMethod = faceType.GetMethod(nameof(List<int>.GetEnumerator));
-            indexOfMethod = faceType.GetMethod(nameof(List<int>.IndexOf));
-            insertMethod = faceType.GetMethod(nameof(List<int>.Insert));
-            removeMethod = faceType.GetMethod(nameof(List<int>.Remove));
-            removeAtMethod = faceType.GetMethod(nameof(List<int>.RemoveAt));
+            // IList<>
+            indexerProp = listType.GetProperties().Where(p => p.GetIndexParameters().Length == 1).First();
+            indexOfMethod = listType.GetMethod(nameof(List<int>.IndexOf));
+            insertMethod = listType.GetMethod(nameof(List<int>.Insert));
+            removeAtMethod = listType.GetMethod(nameof(List<int>.RemoveAt));
+
+            // ICollection<>
+            addMethod = collectionType.GetMethod(nameof(List<int>.Add));
+            clearMethod = collectionType.GetMethod(nameof(List<int>.Clear));
+            containsMethod = collectionType.GetMethod(nameof(List<int>.Contains));
+            removeMethod = collectionType.GetMethod(nameof(List<int>.Remove));
+            countProp = collectionType.GetProperty(nameof(IList<object>.Count));
+            isReadOnlyProp = collectionType.GetProperty(nameof(IList<object>.IsReadOnly));
+
+            // IEnumerable
+            getEnumeratorMethod = enumerableType.GetMethod(nameof(List<int>.GetEnumerator));
         }
 
         public object this[int index]

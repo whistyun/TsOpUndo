@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace TsOpUndo.Test
+namespace TsOpUndo.Test.Parts
 {
     public class Bindable : INotifyPropertyChanged
     {

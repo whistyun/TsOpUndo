@@ -41,13 +41,10 @@ namespace TsOpUndo.Operations
             return false;
         }
 
-        public override void Merge(IMergeableOperation nextOperation)
+        protected override void DoMerge(IMergeableOperation nextOperation)
         {
-            if (nextOperation is PropertyOperation pop)
-            {
-                _nextValue = pop._nextValue;
-            }
-            else throw new ArgumentException($"{nextOperation} is not PropertyOperation");
+            var pop = (PropertyOperation)nextOperation;
+            _nextValue = pop._nextValue;
         }
 
         protected override void DoRollback()

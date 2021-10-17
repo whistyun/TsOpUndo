@@ -3,12 +3,12 @@
         <TargetFrameworks>net45;netcoreapp3.1</TargetFrameworks>
         <OutputType>Library</OutputType>
         <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-        <Authors>p4j4dyxcyr</Authors>
-        <Copyright>p4j4dyxcyr</Copyright>
+        <Authors>p4j4dyxcyr; whityun</Authors>
+        <Copyright>Copyright (c) 2020 p4j4dyxcyr, 2021 whistyun</Copyright>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-        <PackageVersion>1.0.3</PackageVersion>
-        <AssemblyVersion>1.0.3</AssemblyVersion>
+        <PackageVersion>1.0.5</PackageVersion>
+        <AssemblyVersion>1.0.5</AssemblyVersion>
         <RootNamespace>TsOpUndo</RootNamespace>
     </PropertyGroup>
 </Project>

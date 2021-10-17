@@ -36,15 +36,21 @@ namespace TsOpUndo.Internal.Listeners
 
         private void Notify_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
-            foreach (var idx in Enumerable.Range(e.OldStartingIndex, e.OldItems.Count).Reverse())
+            if (e.OldItems != null)
             {
-                _targetListener[idx]?.Cancel();
-                _targetListener.RemoveAt(idx);
+                foreach (var idx in Enumerable.Range(e.OldStartingIndex, e.OldItems.Count).Reverse())
+                {
+                    _targetListener[idx]?.Cancel();
+                    _targetListener.RemoveAt(idx);
+                }
             }
 
-            foreach (var tpl in e.NewItems.Cast<object>().Select((item, index) => new { item, index }))
+            if (e.NewItems != null)
             {
-                ScanItem(tpl.item, tpl.index + e.NewStartingIndex);
+                foreach (var tpl in e.NewItems.Cast<object>().Select((item, index) => new { item, index }))
+                {
+                    ScanItem(tpl.item, tpl.index + e.NewStartingIndex);
+                }
             }
 
             if (!_controller.IsOperating)
@@ -88,6 +94,8 @@ namespace TsOpUndo.Internal.Listeners
                     default:
                         throw new InvalidOperationException();
                 }
+
+                _controller.Push(operation);
             }
         }
 

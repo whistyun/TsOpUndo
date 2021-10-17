@@ -6,114 +6,10 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using TsOpUndo;
+using TsOpUndo.Test.Parts;
 
 namespace TsOpUndo.Test
 {
-    internal class Person : Bindable, IDisposable, IRestoreable
-    {
-        private string _name;
-
-        public Person()
-        {
-        }
-
-        public static string StaticValue { get; set; }
-
-        public string Name
-        {
-            get => _name;
-            set => SetProperty(ref _name, value);
-        }
-
-        private int _age;
-
-        public int Age
-        {
-            get => _age;
-            set => SetProperty(ref _age, value);
-        }
-
-        private Person _partner;
-        public Person Partner
-        {
-            get => _partner;
-            set => SetProperty(ref _partner, value);
-        }
-
-        public ReactivePropertySlim<string> RP { get; set; } = new ReactivePropertySlim<string>();
-
-        private ObservableCollection<Person> _children = new ObservableCollection<Person>();
-        private bool disposedValue;
-
-        public ObservableCollection<Person> Children
-        {
-            get => _children;
-            set => SetProperty(ref _children, value);
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!disposedValue)
-            {
-                if (disposing)
-                {
-                    RP.Dispose();
-                }
-
-                _name = null;
-                _children = null;
-                RP = null;
-                disposedValue = true;
-            }
-        }
-
-        public void Dispose()
-        {
-            // このコードを変更しないでください。クリーンアップ コードを 'Dispose(bool disposing)' メソッドに記述します
-            Dispose(disposing: true);
-            GC.SuppressFinalize(this);
-        }
-
-        public void Restore(Action restorePropertiesAction)
-        {
-            if (!disposedValue) return;
-
-            disposedValue = false;
-            _name = string.Empty;
-            _age = 0;
-            _children = new ObservableCollection<Person>();
-            RP = new ReactivePropertySlim<string>();
-
-            restorePropertiesAction.Invoke();
-            GC.ReRegisterForFinalize(this);
-        }
-
-        public override int GetHashCode()
-        {
-            return Age + (Name ?? "").GetHashCode();
-        }
-
-        public override bool Equals(object obj)
-        {
-            if (obj is Person p)
-            {
-                return Age == p.Age && Name == p.Name;
-            }
-            return false;
-        }
-    }
-
-    internal class Holder : Bindable
-    {
-        private ObservableCollection<string> _children = new ObservableCollection<string>();
-
-        public ObservableCollection<string> Children
-        {
-            get => _children;
-            set => SetProperty(ref _children, value);
-        }
-    }
-
     [TestFixture]
     public class UnitTest
     {
@@ -150,8 +46,8 @@ namespace TsOpUndo.Test
         {
             var controller = new OperationController();
 
-            // デフォルトのマージ時間を 70msに設定
-            OperationController.DefaultMergeSpan = TimeSpan.FromMilliseconds(70);
+            // マージ時間を 70msに設定
+            controller.MergeSpan = TimeSpan.FromMilliseconds(70);
 
             Person.StaticValue = "Geso";
 
@@ -185,8 +81,8 @@ namespace TsOpUndo.Test
                 Age = 14,
             };
 
-            // デフォルトのマージ時間を 70msに設定
-            OperationController.DefaultMergeSpan = TimeSpan.FromMilliseconds(70);
+            // マージ時間を 70msに設定
+            controller.MergeSpan = TimeSpan.FromMilliseconds(70);
 
             //Age = 30
             controller.ExecuteSetProperty(person, nameof(Person.Age), 30);
@@ -267,69 +163,81 @@ namespace TsOpUndo.Test
             person.Children.Add("C");
             person.Children.Add("D");
 
-
             var watcher = controller.BindListPropertyChanged(person, nameof(Person.Children));
 
-            // add
+            Test();
 
-            person.Children.Add("E");
+            person.Children = new ObservableCollection<string>();
+            person.Children.Add("A");
+            person.Children.Add("B");
+            person.Children.Add("C");
+            person.Children.Add("D");
 
-            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D", "E" }, person.Children));
-            controller.Undo();
-            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
-            controller.Redo();
-            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D", "E" }, person.Children));
-            controller.Undo();
+            Test();
 
-            // insert
+            void Test()
+            {
+                // add
 
-            person.Children.Insert(2, "E");
+                person.Children.Add("E");
 
-            controller.Undo();
-            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
-            controller.Redo();
-            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "E", "C", "D" }, person.Children));
-            controller.Undo();
+                Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D", "E" }, person.Children));
+                controller.Undo();
+                Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
+                controller.Redo();
+                Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D", "E" }, person.Children));
+                controller.Undo();
 
-            // replace
+                // insert
 
-            person.Children[2] = "E";
+                person.Children.Insert(2, "E");
 
-            controller.Undo();
-            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
-            controller.Redo();
-            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "E", "D" }, person.Children));
-            controller.Undo();
+                controller.Undo();
+                Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
+                controller.Redo();
+                Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "E", "C", "D" }, person.Children));
+                controller.Undo();
 
-            // remove
+                // replace
 
-            person.Children.RemoveAt(person.Children.Count - 1);
+                person.Children[2] = "E";
 
-            controller.Undo();
-            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
-            controller.Redo();
-            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C" }, person.Children));
-            controller.Undo();
+                controller.Undo();
+                Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
+                controller.Redo();
+                Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "E", "D" }, person.Children));
+                controller.Undo();
 
-            // move
+                // remove
 
-            person.Children.Move(0, 3);
+                person.Children.RemoveAt(person.Children.Count - 1);
 
-            controller.Undo();
-            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
-            controller.Redo();
-            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "B", "C", "D", "A" }, person.Children));
-            controller.Undo();
+                controller.Undo();
+                Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
+                controller.Redo();
+                Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C" }, person.Children));
+                controller.Undo();
 
-            // clear
+                // move
 
-            person.Children.Clear();
+                person.Children.Move(0, 3);
 
-            controller.Undo();
-            Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
-            controller.Redo();
-            Assert.IsTrue(Enumerable.SequenceEqual(new string[0], person.Children));
-            controller.Undo();
+                controller.Undo();
+                Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
+                controller.Redo();
+                Assert.IsTrue(Enumerable.SequenceEqual(new[] { "B", "C", "D", "A" }, person.Children));
+                controller.Undo();
+
+                // clear
+
+                person.Children.Clear();
+
+                controller.Undo();
+                Assert.IsTrue(Enumerable.SequenceEqual(new[] { "A", "B", "C", "D" }, person.Children));
+                controller.Redo();
+                Assert.IsTrue(Enumerable.SequenceEqual(new string[0], person.Children));
+                controller.Undo();
+            }
         }
 
         /// <summary>
@@ -339,6 +247,7 @@ namespace TsOpUndo.Test
         public void ObservePropertyChangedTest()
         {
             var controller = new OperationController();
+            controller.MergeSpan = TimeSpan.FromMilliseconds(70);
 
             var person = new Person()
             {
@@ -531,8 +440,8 @@ namespace TsOpUndo.Test
             var person = new Person();
             person.RP.Value = "Value1";
 
-            // デフォルトのマージ時間を 70msに設定
-            OperationController.DefaultMergeSpan = TimeSpan.FromMilliseconds(70);
+            // マージ時間を 70msに設定
+            controller.MergeSpan = TimeSpan.FromMilliseconds(70);
 
             //75ms 待つ
             await Task.Delay(75);

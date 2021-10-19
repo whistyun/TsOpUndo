@@ -14,7 +14,6 @@ namespace TsOpUndo.Internal.Listeners
         private IList _list;
         private object[] _targetBackup;
         private List<ICancellable> _targetListener;
-        private List<ICancellable> _siblingListener;
 
 
         public ObjectListListener(OperationController controller, IList list)

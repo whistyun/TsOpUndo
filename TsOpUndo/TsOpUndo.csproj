@@ -13,4 +13,10 @@
     <Description>Undo / Redo library for WPF+MVVM</Description>
     <PackageTags>WPF Undo Redo</PackageTags>
   </PropertyGroup>
+  <PropertyGroup>
+    <!--
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    -->
+    <DocumentationFile>bin\TsOpUndo.xml</DocumentationFile>
+  </PropertyGroup>
 </Project>

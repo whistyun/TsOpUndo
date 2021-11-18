@@ -7,15 +7,22 @@ using System.Threading.Tasks;
 namespace TsOpUndo.Operations
 {
     /// <summary>
-    /// 複数のオペレーションを一纏めにし、
-    /// 1つのオペレーションとして扱えるようにするためのオペレーション
+    /// 複数の操作を一纏めにし、
+    /// 1つの操作として扱えるようにするためのクラス
     /// </summary>
     public class CompositeOperation : AbstractOperation
     {
         private readonly ICollection<IOperation> _operations = new List<IOperation>();
 
+        /// <summary>
+        /// 纏められた操作の一覧
+        /// </summary>
         public IEnumerable<IOperation> Operations => _operations.ToArray();
 
+        /// <summary>
+        /// 複数の操作を一纏めにします
+        /// </summary>
+        /// <param name="operations">纏める操作</param>
         public CompositeOperation(params IOperation[] operations)
         {
             if (operations is null) throw new NullReferenceException(nameof(operations));
@@ -23,13 +30,14 @@ namespace TsOpUndo.Operations
             Add(operations);
         }
 
-
+        /// <inheritdoc/>
         protected override void DoRollback()
         {
             foreach (var operation in _operations.Reverse())
                 operation.Rollback();
         }
 
+        /// <inheritdoc/>
         protected override void DoRollForward()
         {
             foreach (var operation in _operations)
@@ -37,7 +45,7 @@ namespace TsOpUndo.Operations
         }
 
         /// <summary>
-        /// オペレーションを追加します
+        /// 操作を纏める対象として追加します
         /// </summary>
         public CompositeOperation Add(IOperation operation)
         {
@@ -48,7 +56,7 @@ namespace TsOpUndo.Operations
         }
 
         /// <summary>
-        /// オペレーションを追加します
+        /// 操作を纏める対象として追加します
         /// </summary>
         public CompositeOperation Add(params IOperation[] operations)
         {
@@ -60,7 +68,11 @@ namespace TsOpUndo.Operations
         }
     }
 
-    public static class CompositeOperationExt {
+    /// <summary>
+    /// CompositeOperationに関する拡張メソッドを纏めたクラス
+    /// </summary>
+    public static class CompositeOperationExt
+    {
         /// <summary>
         /// 複数のオペレーションをグループ化して１つのオペレーションに変換する
         /// </summary>

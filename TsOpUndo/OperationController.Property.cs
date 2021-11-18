@@ -15,8 +15,20 @@ using TsOpUndo.Operations;
 
 namespace TsOpUndo
 {
+    /*
+     * プロパティの変更・監視に関するメソッドを定義しています
+     */
+
     public partial class OperationController
     {
+        /// <summary>
+        /// プロパティの値変更を操作として実行・記録します。
+        /// </summary>
+        /// <typeparam name="T">オブジェクトの型</typeparam>
+        /// <typeparam name="V">プロパティの型</typeparam>
+        /// <param name="owner">オブジェクト</param>
+        /// <param name="selector">プロパティへのアクセス</param>
+        /// <param name="value">設定する値</param>
         public void ExecuteSetProperty<T, V>(T owner, Expression<Func<T, V>> selector, V value)
         {
             var propertyName = ((MemberExpression)selector.Body).Member.Name;
@@ -24,6 +36,13 @@ namespace TsOpUndo
             ExecuteSetProperty(owner, propertyName, value);
         }
 
+        /// <summary>
+        /// プロパティの値変更を操作として実行・記録します。
+        /// </summary>
+        /// <typeparam name="V">プロパティの型</typeparam>
+        /// <param name="owner">オブジェクト</param>
+        /// <param name="propertyName">プロパティ名</param>
+        /// <param name="value">設定する値</param>
         public void ExecuteSetProperty<V>(object owner, string propertyName, V value)
         {
             var operation = new PropertyOperation(owner, propertyName, value);
@@ -31,6 +50,13 @@ namespace TsOpUndo
             Execute(operation);
         }
 
+        /// <summary>
+        /// クラス変数の値変更を操作として実行・記録します。
+        /// </summary>
+        /// <typeparam name="V">変更値の型</typeparam>
+        /// <param name="class">クラス</param>
+        /// <param name="propertyName">クラス変数名</param>
+        /// <param name="value">変更後の値</param>
         public void ExecuteSetStaticProperty<V>(Type @class, string propertyName, V value)
         {
             var operation = new StaticPropertyOperation(@class, propertyName, value);
@@ -38,6 +64,13 @@ namespace TsOpUndo
             Execute(operation);
         }
 
+        /// <summary>
+        /// プロパティの監視を行います
+        /// </summary>
+        /// <param name="owner">監視対象のオブジェクト</param>
+        /// <param name="propertyName">監視するプロパティの名前</param>
+        /// <param name="autoMerge">値変更の操作をマージ可能とするか</param>
+        /// <returns>監視を終了する場合Disposeを呼び出してください</returns>
         public IDisposable BindPropertyChangedDisposable(
             INotifyPropertyChanged owner,
             string propertyName,
@@ -47,6 +80,13 @@ namespace TsOpUndo
             return new Disposer(() => cancellable.Cancel());
         }
 
+        /// <summary>
+        /// リスト変更の監視を行います
+        /// </summary>
+        /// <param name="owner">監視対象のオブジェクト</param>
+        /// <param name="propertyName">監視するプロパティの名前</param>
+        /// <param name="autoMerge">値変更の操作をマージ可能とするか</param>
+        /// <returns>監視を終了する場合Disposeを呼び出してください</returns>
         public IDisposable BindListPropertyChangedDisposable(
                         INotifyPropertyChanged owner,
                         string propertyName,
@@ -56,6 +96,12 @@ namespace TsOpUndo
             return new Disposer(() => cancellable.Cancel());
         }
 
+        /// <summary>
+        /// プロパティの監視を行います
+        /// </summary>
+        /// <param name="owner">監視対象のオブジェクト</param>
+        /// <param name="propertyName">監視するプロパティの名前</param>
+        /// <param name="autoMerge">値変更の操作をマージ可能とするか</param>
         public ICancellable BindPropertyChanged(
             INotifyPropertyChanged owner,
             string propertyName,
@@ -79,16 +125,32 @@ namespace TsOpUndo
             return new PropertyListeners(this, obj, propNm, prevVal, autoMerge);
         }
 
+        /// <summary>
+        /// オブジェクトが持つ全てのプロパティを監視します
+        /// </summary>
+        /// <param name="owner">監視対象のオブジェクト</param>
+        /// <returns>監視を終了する場合Cancelを呼び出してください</returns>
         public ICancellable BindPropertyChanged2(INotifyPropertyChanged2 owner)
         {
             return new ObjectListener(this, owner);
         }
 
+        /// <summary>
+        /// オブジェクトが持つ全てのプロパティを監視します
+        /// </summary>
+        /// <param name="owner">監視対象のオブジェクト</param>
+        /// <returns>監視を終了する場合Cancelを呼び出してください</returns>
         public ICancellable BindPropertyChanged2Fast(INotifyPropertyChanged2 owner)
         {
             return new FastObjectListener(this, owner);
         }
 
+        /// <summary>
+        /// リスト変更の監視を行います
+        /// </summary>
+        /// <param name="owner">監視対象のオブジェクト</param>
+        /// <param name="propertyName">監視するプロパティの名前</param>
+        /// <param name="autoMerge">値変更の操作をマージ可能とするか</param>
         public ICancellable BindListPropertyChanged(
                 INotifyPropertyChanged owner,
                 string propertyName,

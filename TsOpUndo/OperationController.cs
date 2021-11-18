@@ -10,10 +10,13 @@ using TsOpUndo.Operations;
 namespace TsOpUndo
 {
     /// <summary>
-    /// オペレーションを実行するコントローラ
+    /// 操作を履歴として管理し、Undo / Redoを実行するクラス
     /// </summary>
     public partial class OperationController
     {
+        /// <summary>
+        /// 前回操作と今回操作をマージするか決める閾時間(デフォルト値)
+        /// </summary>
         public static TimeSpan DefaultMergeSpan = TimeSpan.FromSeconds(0);
 
         private readonly UndoStack<IOperation> _undoStack;
@@ -21,18 +24,28 @@ namespace TsOpUndo
         private DateTime _lastPushed = DateTime.Now;
 
         private TimeSpan? _mergeSpan;
+
+        /// <summary>
+        /// 前回操作と今回操作をマージするか決める閾時間
+        /// </summary>
         public TimeSpan MergeSpan
         {
             get => _mergeSpan.HasValue ? _mergeSpan.Value : DefaultMergeSpan;
             set => _mergeSpan = value;
         }
 
-
+        /// <summary>
+        /// 記録する操作数を1024としてインスタンスを作成
+        /// </summary>
         public OperationController()
             : this(1024)
         {
         }
 
+        /// <summary>
+        /// 記録する操作数を指定してインスタンスを作成
+        /// </summary>
+        /// <param name="capacity">記録する操作数上限</param>
         public OperationController(int capacity)
         {
             if (capacity < 0) throw new ArgumentException($"{nameof(capacity)} must be positive.");
@@ -42,12 +55,12 @@ namespace TsOpUndo
         }
 
         /// <summary>
-        /// 前の処理(戻せる処理)が残っているか？
+        /// 前の操作(戻せる操作)が残っているか？
         /// </summary>
         public bool HasUndo => _undoStack.HasUndo;
 
         /// <summary>
-        /// 次の処理(やり直せる処理)が残っているか？
+        /// 次の操作(やり直せる操作)が残っているか？
         /// </summary>
         public bool HasRedo => _undoStack.HasRedo;
 
@@ -72,7 +85,7 @@ namespace TsOpUndo
         public event EventHandler<OperationStackChangedEventArgs> StackChanged;
 
         /// <summary>
-        /// 先頭のオペレーションをロールバックする
+        /// 最後に記録された操作を取り消します。
         /// </summary>
         public void Undo()
         {
@@ -84,7 +97,7 @@ namespace TsOpUndo
         }
 
         /// <summary>
-        /// ロールバックされたオペレーションをロールフォワードする
+        /// 最後に取り消された操作を再実行します。
         /// </summary>
         public void Redo()
         {
@@ -96,7 +109,7 @@ namespace TsOpUndo
         }
 
         /// <summary>
-        /// スタックをクリアする
+        /// 記録された操作を全て削除します。
         /// </summary>
         public void Clear()
         {
@@ -111,8 +124,9 @@ namespace TsOpUndo
         }
 
         /// <summary>
-        /// スタックからデータを取り出さずにデータを取得する
+        /// 最後に記録された操作を取得します。
         /// </summary>
+        /// <returns>最後に記録された操作</returns>
         public IOperation Peek()
         {
             return _compositeBuilder.Count > 0 ?
@@ -121,8 +135,9 @@ namespace TsOpUndo
         }
 
         /// <summary>
-        /// スタックからデータを取り出す
+        /// 最後に記録された操作を取得し、記録から削除します。
         /// </summary>
+        /// <returns>最後に記録された操作。操作は記録から削除されます。</returns>
         public IOperation Pop()
         {
             PreStackChanged();
@@ -136,6 +151,11 @@ namespace TsOpUndo
             return result;
         }
 
+        /// <summary>
+        /// 操作を記録します。
+        /// </summary>
+        /// <param name="operation">記録する操作</param>
+        /// <returns>記録した操作</returns>
         public IOperation Push(IOperation operation)
         {
             if (operation is null) throw new ArgumentNullException(nameof(operation));
@@ -164,8 +184,10 @@ namespace TsOpUndo
         }
 
         /// <summary>
-        /// 実行しないでスタックにデータを積む
+        /// 操作を記録します。操作は前回の操作とマージしません。
         /// </summary>
+        /// <param name="operation">記録する操作</param>
+        /// <returns>記録した操作</returns>
         public IOperation PushWithoutMerge(IOperation operation)
         {
             if (operation is null) throw new ArgumentNullException(nameof(operation));
@@ -183,8 +205,10 @@ namespace TsOpUndo
         }
 
         /// <summary>
-        /// 操作を実行し、スタックに積む
+        /// 操作を実行し、記録します。
         /// </summary>
+        /// <param name="operation">記録する操作</param>
+        /// <returns>記録した操作</returns>
         public IOperation Execute(IOperation operation)
         {
             if (operation is null) throw new ArgumentNullException(nameof(operation));
@@ -194,6 +218,13 @@ namespace TsOpUndo
             return operation;
         }
 
+        /// <summary>
+        /// Dispose処理を操作として記録します。
+        /// </summary>
+        /// <typeparam name="T">Dispose処理をするデータ型</typeparam>
+        /// <param name="disposer">Dispose処理をするデータ</param>
+        /// <param name="restorePropertyAction">復元処理</param>
+        /// <returns>記録した操作</returns>
         public IOperation ExecuteDispose<T>(T disposer, Action restorePropertyAction) where T : IDisposable, IRestoreable
         {
             var operation = new DelegateOperation(

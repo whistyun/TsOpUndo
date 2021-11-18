@@ -110,6 +110,8 @@ namespace TsOpUndo.Internal.Listeners
 
             if (!_controller.IsOperating)
             {
+                if (e.IsChained) return;
+
                 var operation = new PropertyOperation(_object, e.PropertyName, e.OldValue, e.NewValue);
                 _controller.Push(operation);
             }

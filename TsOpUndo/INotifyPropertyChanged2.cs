@@ -10,6 +10,9 @@ namespace TsOpUndo
 {
     public interface INotifyPropertyChanged2 : INotifyPropertyChanged
     {
+        /// <summary>
+        /// プロパティの値変更時に呼び出されます
+        /// </summary>
         event PropertyChangedEventHandler2 PropertyChanged2;
     }
 
@@ -20,19 +23,67 @@ namespace TsOpUndo
         public object OldValue { get; }
         public object NewValue { get; }
 
-        public PropertyChangedEvent2Args(string propertyName, object oldV, object newV) : base(propertyName)
+        /// <summary>他の値変更に関連して発生したイベントであることを示します</summary>
+        public bool IsChained { get; }
+
+        /// <summary>
+        /// インスタンス生成
+        /// </summary>
+        /// <param name="propertyName">変更が発生したプロパティの名前</param>
+        /// <param name="oldV">変更前の値</param>
+        /// <param name="newV">変更後の値</param>
+        public PropertyChangedEvent2Args(string propertyName, object oldV, object newV) :
+            this(propertyName, oldV, newV, false)
+        {
+        }
+
+        /// <summary>
+        /// 関連したイベントとしてインスタンス生成
+        /// </summary>
+        /// <param name="propertyName">変更が発生したプロパティの名前</param>
+        /// <param name="baseEv">元とするイベント</param>
+        public PropertyChangedEvent2Args(string propertyName, PropertyChangedEvent2Args baseEv) :
+            this(propertyName, baseEv.OldValue, baseEv.NewValue, true)
+        {
+        }
+
+        /// <summary>
+        /// インスタンス生成
+        /// </summary>
+        /// <param name="propertyName">変更が発生したプロパティの名前</param>
+        /// <param name="oldV">変更前の値</param>
+        /// <param name="newV">変更後の値</param>
+        /// <param name="isChained">関連したイベントか？</param>
+        public PropertyChangedEvent2Args(string propertyName, object oldV, object newV, bool isChained) :
+            base(propertyName)
         {
             OldValue = oldV;
             NewValue = newV;
+            IsChained = isChained;
         }
-
     }
 
-    public class GenericNotifyPropertyChanged2 : INotifyPropertyChanged2
+    public abstract class AbstractNotifyPropertyChanged2 : INotifyPropertyChanged2
     {
-        public event PropertyChangedEventHandler2 PropertyChanged2;
+        /// <inheritdoc/>
         public event PropertyChangedEventHandler PropertyChanged;
 
+        /// <inheritdoc/>
+        public event PropertyChangedEventHandler2 PropertyChanged2;
+
+        /// <summary>
+        /// PropertyChangedイベントとPropertyChanged2イベントを発火します
+        /// </summary>
+        /// <param name="ev">イベントデータ</param>
+        internal void Raise(PropertyChangedEvent2Args ev)
+        {
+            PropertyChanged2?.Invoke(this, ev);
+            PropertyChanged?.Invoke(this, ev);
+        }
+    }
+
+    public class GenericNotifyPropertyChanged2 : AbstractNotifyPropertyChanged2
+    {
         protected Dictionary<string, object> ValueStore = new Dictionary<string, object>();
 
         protected bool SetValue<V>(V newValue, [CallerMemberName] string propertyName = null)
@@ -41,12 +92,9 @@ namespace TsOpUndo
 
             if (EqualityComparer<V>.Default.Equals(oldValue, newValue)) return false;
 
-
             ValueStore[propertyName] = newValue;
 
-            var ev = new PropertyChangedEvent2Args(propertyName, oldValue, newValue);
-            PropertyChanged2?.Invoke(this, ev);
-            PropertyChanged?.Invoke(this, ev);
+            Raise(new PropertyChangedEvent2Args(propertyName, oldValue, newValue));
 
             return true;
         }
@@ -64,23 +112,8 @@ namespace TsOpUndo
         }
     }
 
-    public class NotifyPropertyChanged2 : INotifyPropertyChanged2
+    public class NotifyPropertyChanged2 : AbstractNotifyPropertyChanged2
     {
-        /// <inheritdoc/>
-        public event PropertyChangedEventHandler PropertyChanged;
-
-        /// <summary>
-        /// プロパティの値変更時に呼び出されます
-        /// </summary>
-        public event PropertyChangedEventHandler2 PropertyChanged2;
-
-        protected void RaiseFrom(PropertyChangedEvent2Args @base, [CallerMemberName] string propertyName = null)
-        {
-            var ev = new PropertyChangedEvent2Args(propertyName, @base.OldValue, @base.NewValue);
-            PropertyChanged2?.Invoke(this, ev);
-            PropertyChanged.Invoke(this, ev);
-        }
-
         /// <summary>
         /// プロパティの値が変更されたことを通知します
         /// </summary>
@@ -90,8 +123,7 @@ namespace TsOpUndo
 
             var ev = new PropertyChangedEvent2Args(propertyName, oldV, newV);
             setter(newV);
-            PropertyChanged2?.Invoke(this, ev);
-            PropertyChanged.Invoke(this, ev);
+            Raise(ev);
 
             return true;
         }
@@ -105,21 +137,26 @@ namespace TsOpUndo
 
             var ev = new PropertyChangedEvent2Args(propertyName, property, newV);
             property = newV;
-            PropertyChanged2?.Invoke(this, ev);
-            PropertyChanged.Invoke(this, ev);
+            Raise(ev);
 
             return true;
         }
 
-        protected void ChainFrom(INotifyPropertyChanged2 source, string sourceProperty, string propertyName)
+        protected void ChainFrom(INotifyPropertyChanged2 source, string sourcePropertyName, string propertyName)
         {
             source.PropertyChanged2 += (s, e) =>
             {
-                if (String.IsNullOrEmpty(e.PropertyName) || e.PropertyName == sourceProperty)
+                if (e.PropertyName == sourcePropertyName)
                 {
                     RaiseFrom(e, propertyName);
                 }
             };
+        }
+
+        private void RaiseFrom(PropertyChangedEvent2Args @base, string propertyName = null)
+        {
+            var ev = new PropertyChangedEvent2Args(propertyName, @base.OldValue, @base.NewValue, true);
+            Raise(ev);
         }
 
     }

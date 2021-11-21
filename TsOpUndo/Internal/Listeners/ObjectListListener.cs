@@ -14,14 +14,15 @@ namespace TsOpUndo.Internal.Listeners
         private IList _list;
         private object[] _targetBackup;
         private List<ICancellable> _targetListener;
+        private bool _enableRecord;
 
-
-        public ObjectListListener(OperationController controller, IList list)
+        public ObjectListListener(OperationController controller, IList list, bool onlyScan)
         {
             _controller = controller;
             _list = list;
             _targetBackup = list.Cast<object>().ToArray();
             _targetListener = new List<ICancellable>();
+            _enableRecord = !onlyScan;
 
             if (list is INotifyCollectionChanged notify)
             {
@@ -52,7 +53,7 @@ namespace TsOpUndo.Internal.Listeners
                 }
             }
 
-            if (!_controller.IsOperating)
+            if (!_controller.IsOperating && _enableRecord)
             {
                 IOperation operation;
                 switch (e.Action)
@@ -100,7 +101,7 @@ namespace TsOpUndo.Internal.Listeners
 
         private void ScanItem(object item, int index = -1)
         {
-            ICancellable listener = ObjectListener.EvaluateListener(_controller, item);
+            ICancellable listener = ObjectListener.EvaluateListener(_controller, item, false);
 
             if (index == -1 || index == _targetListener.Count)
                 _targetListener.Add(listener);

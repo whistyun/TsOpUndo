@@ -173,15 +173,19 @@ namespace TsOpUndo.Test
             Assert.AreEqual(2, controller.Undos.Count());
             controller.Undo();
             Assert.AreEqual("B001", person.Children[0].Name);
+            Assert.AreEqual(1, controller.Undos.Count());
 
             controller.Redo();
             Assert.AreEqual("B002", person.Children[0].Name);
             Assert.AreEqual("B001", person.Children[1].Name);
+            Assert.AreEqual(2, controller.Undos.Count());
 
             person.Children[0].Name = "C010";
             person.Children[1].Name = "C011";
+            Assert.AreEqual(4, controller.Undos.Count());
 
             controller.Undo();
+            Assert.AreEqual(3, controller.Undos.Count());
             Assert.AreEqual("C010", person.Children[0].Name);
             Assert.AreEqual("B001", person.Children[1].Name);
 

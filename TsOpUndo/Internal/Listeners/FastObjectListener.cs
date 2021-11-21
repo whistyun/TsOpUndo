@@ -21,7 +21,7 @@ namespace TsOpUndo.Internal.Listeners
         {
             _controller = controller;
             _object = vm;
-            _objectInfo = PathInfo.Get(vm.GetType());
+            _objectInfo = PathInfo.GetOrInit(vm.GetType());
             _children = new Dictionary<string, List<ICancellable>>();
 
             Scan();
@@ -43,22 +43,29 @@ namespace TsOpUndo.Internal.Listeners
                 );
             }
 
-            foreach (var propPath in _objectInfo.ListOfPropChange2ChildPaths)
+            foreach (var nmPInf in _objectInfo.ListOfPropChange2ChildPaths)
             {
-                TreatProperty(propPath,
+                var onlyScan = _objectInfo.IgnorePropertyPaths.Contains(nmPInf.Path);
+
+                TreatProperty(nmPInf.Path,
                     delegate (string basePath, INotifyCollectionChanged list)
                     {
                         RegisterListener(
                             basePath,
                             new FastObjectListListener(
                                 _controller,
-                                new ListWrapper(list)));
+                                new ListWrapper(list),
+                                nmPInf.Info,
+                                onlyScan));
                     }
                 );
             }
 
             foreach (var propPath in _objectInfo.ListChangeChildPaths)
             {
+                if (_objectInfo.IgnorePropertyPaths.Contains(propPath))
+                    continue;
+
                 TreatProperty(propPath,
                     delegate (string basePath, INotifyCollectionChanged list)
                     {
@@ -75,8 +82,13 @@ namespace TsOpUndo.Internal.Listeners
             {
                 var baseProp = propPath.Split('.')[0];
 
-                if (targetProperty != null && baseProp != targetProperty)
-                    return;
+                // プロパティ名による絞り込み、
+                // 例えば、'Name'で絞り込みする場合は、
+                // 'Name'や、'Name.Account'などを抽出し、'Age'などをはじく
+                var match = targetProperty is null
+                         || targetProperty == baseProp;
+
+                if (!match) return;
 
                 if (FastReflection.TryGetValue(_object, propPath, out T child))
                 {
@@ -112,6 +124,9 @@ namespace TsOpUndo.Internal.Listeners
             {
                 if (e.IsChained) return;
 
+                if (_objectInfo.IgnorePropertyPaths.Contains(e.PropertyName))
+                    return;
+
                 var operation = new PropertyOperation(_object, e.PropertyName, e.OldValue, e.NewValue);
                 _controller.Push(operation);
             }
@@ -129,15 +144,37 @@ namespace TsOpUndo.Internal.Listeners
         }
     }
 
+    /// <summary>
+    /// ある型が持つプロパティを一覧化するためのクラス
+    /// </summary>
     internal class PathInfo
     {
         private static IDictionary<Type, PathInfo> Cache = new Dictionary<Type, PathInfo>();
 
+        /// <summary>
+        /// 対象の型
+        /// </summary>
         public Type Type { get; }
+        /// <summary>
+        /// 対象の型がINotifyPropertyChanged2を実装しているか？
+        /// </summary>
         public bool IsINotifyPropertyChanged2 { get; }
-        public List<string> PropChange2ChildPaths { get; }
-        public List<string> ListOfPropChange2ChildPaths { get; }
 
+        /// <summary>
+        /// NoBindHistory属性がつけられたプロパティパス一覧
+        /// </summary>
+        public HashSet<string> IgnorePropertyPaths { get; }
+        /// <summary>
+        /// INotifyPropertyChanged2を持つプロパティパス一覧
+        /// </summary>
+        public List<string> PropChange2ChildPaths { get; }
+        /// <summary>
+        /// INotifyPropertyChanged2のリストを持つプロパティパス一覧
+        /// </summary>
+        public List<NamedPathInfo> ListOfPropChange2ChildPaths { get; }
+        /// <summary>
+        /// INotifyCollectionChangedを持つプロパティパス一覧
+        /// </summary>
         public List<string> ListChangeChildPaths { get; } = new List<string>();
 
         public bool HasVariable
@@ -154,8 +191,9 @@ namespace TsOpUndo.Internal.Listeners
             Type = type;
             IsINotifyPropertyChanged2 = isINotifyPropertyChanged2;
 
+            IgnorePropertyPaths = new HashSet<string>();
             PropChange2ChildPaths = new List<string>();
-            ListOfPropChange2ChildPaths = new List<string>();
+            ListOfPropChange2ChildPaths = new List<NamedPathInfo>();
         }
 
         private void Init() => ScanOf(null, Type);
@@ -173,27 +211,35 @@ namespace TsOpUndo.Internal.Listeners
 
             foreach (var propInfo in propInfos)
             {
-                Type propType = propInfo.PropertyType;
+                var propPath = basePath + (basePath is null ? "" : ".") + propInfo.Name;
 
+                var nobindAttr = propInfo.GetCustomAttribute<NoBindHistoryAttribute>();
+                if (nobindAttr != null)
+                {
+                    IgnorePropertyPaths.Add(propPath);
+
+                    if (!nobindAttr.AllowBindChild) continue;
+                }
+
+                Type propType = propInfo.PropertyType;
                 if (propType.IsValueType) continue;
                 if (propType == typeof(string)) continue;
-
-                var propPath = basePath + (basePath is null ? "" : ".") + propInfo.Name;
 
                 if (typeof(INotifyPropertyChanged2).IsAssignableFrom(propType))
                 {
                     PropChange2ChildPaths.Add(propPath);
-                    PathInfo.Get(propType);
+                    PathInfo.GetOrInit(propType);
                 }
                 else if (typeof(INotifyCollectionChanged).IsAssignableFrom(propType))
                 {
                     if (propType.HasInterface(typeof(IList<>), out Type propListType))
                     {
                         var componentType = propListType.GetGenericArguments().First();
-                        var componentInfo = PathInfo.Get(componentType);
+                        var componentInfo = PathInfo.GetOrInit(componentType);
                         if (componentInfo.HasVariable)
                         {
-                            ListOfPropChange2ChildPaths.Add(propPath);
+                            var item = new NamedPathInfo(propPath, componentInfo);
+                            ListOfPropChange2ChildPaths.Add(item);
                         }
                         else
                         {
@@ -215,7 +261,7 @@ namespace TsOpUndo.Internal.Listeners
         }
 
         [MethodImpl(MethodImplOptions.Synchronized)]
-        public static PathInfo Get(Type type)
+        public static PathInfo GetOrInit(Type type)
         {
             if (Cache.TryGetValue(type, out var info))
             {
@@ -229,6 +275,18 @@ namespace TsOpUndo.Internal.Listeners
 
                 return info;
             }
+        }
+    }
+
+    internal class NamedPathInfo
+    {
+        public string Path { get; }
+        public PathInfo Info { get; }
+
+        public NamedPathInfo(string path, PathInfo info)
+        {
+            Path = path;
+            Info = info;
         }
     }
 }

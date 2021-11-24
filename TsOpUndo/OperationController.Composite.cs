@@ -9,8 +9,16 @@ using TsOpUndo.Operations;
 
 namespace TsOpUndo
 {
+    /*
+     * 操作のグループ化に関するメソッドを定義しています
+     */
+
     public partial class OperationController
     {
+        /// <summary>
+        /// Undo / Redoの登録を一纏めに収集開始します
+        /// </summary>
+        /// <returns>収集を終了する際には戻り値のDisposeを呼び出してください</returns>
         public IDisposable BeginRecord()
         {
             _compositeBuilder.Push(new UndoStack<IOperation>(1024));

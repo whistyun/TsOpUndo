@@ -2,6 +2,9 @@
 
 namespace TsOpUndo.Operations
 {
+    /// <summary>
+    /// プロパティ変更の操作のためのマージ用キー
+    /// </summary>
     class PropertyKey : IEquatable<PropertyKey>
     {
         object _object;

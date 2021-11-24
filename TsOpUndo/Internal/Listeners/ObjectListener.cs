@@ -10,7 +10,7 @@ namespace TsOpUndo.Internal.Listeners
 {
     internal class ObjectListener : ICancellable
     {
-        public static ICancellable EvaluateListener(OperationController controller, object target)
+        public static ICancellable EvaluateListener(OperationController controller, object target, bool onlyscan)
         {
             if (target is null) return null;
             if (target is string) return null;
@@ -28,24 +28,24 @@ namespace TsOpUndo.Internal.Listeners
                 if (targetType.HasInterface(typeof(IList<>)))
                 {
                     var list = new ListWrapper(target);
-                    return new ObjectListListener(controller, list);
+                    return new ObjectListListener(controller, list, onlyscan);
                 }
                 else if (typeof(IList).IsAssignableFrom(targetType))
                 {
                     var list = (IList)target;
-                    return new ObjectListListener(controller, list);
+                    return new ObjectListListener(controller, list, onlyscan);
                 }
             }
             if (target is IEnumerable enumerable)
             {
                 return enumerable.Cast<object>()
-                                 .Select(itm => EvaluateListener(controller, itm))
+                                 .Select(itm => EvaluateListener(controller, itm, false))
                                  .Where(listener => listener != null)
                                  .CollectOrNull();
             }
 
             return targetType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                             .Select(pinf => EvaluateListener(controller, pinf.GetValue(target)))
+                             .Select(pinf => EvaluateListener(controller, pinf.GetValue(target), false))
                              .Where(listener => listener != null)
                              .CollectOrNull();
         }
@@ -55,6 +55,8 @@ namespace TsOpUndo.Internal.Listeners
 
         private OperationController _controller;
         private INotifyPropertyChanged2 _object;
+        private HashSet<string> _allowScanPropertyNames;
+        private HashSet<string> _ignorePropertyNames;
         private Dictionary<string, List<ICancellable>> _children;
 
         public ObjectListener(OperationController controller, INotifyPropertyChanged2 vm)
@@ -62,26 +64,31 @@ namespace TsOpUndo.Internal.Listeners
             _controller = controller;
             _object = vm;
             _children = new Dictionary<string, List<ICancellable>>();
+            _allowScanPropertyNames = new HashSet<string>();
+            _ignorePropertyNames = new HashSet<string>();
 
             vm.PropertyChanged2 += PropertyChanged2;
 
-            ScanObject(_object);
-        }
-
-        private void ScanObject(object targetObj)
-        {
-            if (targetObj is null) return;
-
-            foreach (var propInfo in targetObj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            foreach (var propInfo in _object.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
-                ScanProperty(targetObj, propInfo);
+                var nobindAttr = propInfo.GetCustomAttribute<NoBindHistoryAttribute>();
+                if (nobindAttr != null)
+                {
+                    _ignorePropertyNames.Add(propInfo.Name);
+
+                    if (!nobindAttr.AllowBindChild)
+                        continue;
+                }
+                _allowScanPropertyNames.Add(propInfo.Name);
+
+                ScanProperty(propInfo, _ignorePropertyNames.Contains(propInfo.Name));
             }
         }
 
-        private void ScanProperty(object targetObject, PropertyInfo propInfo)
+        private void ScanProperty(PropertyInfo propInfo, bool onlyscan)
         {
-            object propVal = propInfo.GetValue(targetObject);
-            ICancellable listener = ObjectListener.EvaluateListener(_controller, propVal);
+            object propVal = propInfo.GetValue(_object);
+            ICancellable listener = ObjectListener.EvaluateListener(_controller, propVal, onlyscan);
             if (listener is null) return;
 
             RegisterListener(propInfo.Name, listener);
@@ -109,10 +116,15 @@ namespace TsOpUndo.Internal.Listeners
                 list.Clear();
             }
 
-            ScanProperty(_object, _object.GetType().GetProperty(e.PropertyName));
+            if (_allowScanPropertyNames.Contains(e.PropertyName))
+                ScanProperty(
+                    _object.GetType().GetProperty(e.PropertyName),
+                    _ignorePropertyNames.Contains(e.PropertyName));
 
-            if (!_controller.IsOperating)
+            if (!_controller.IsOperating && !_ignorePropertyNames.Contains(e.PropertyName))
             {
+                if (e.IsChained) return;
+
                 var operation = new PropertyOperation(_object, e.PropertyName, e.OldValue, e.NewValue);
                 _controller.Push(operation);
             }

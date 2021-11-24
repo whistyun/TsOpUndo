@@ -6,11 +6,17 @@
     <Authors>p4j4dyxcyr, dhq-boiler, whityun</Authors>
     <Copyright>Copyright (c) 2020 p4j4dyxcyr, 2021 whistyun</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageVersion>1.0.5</PackageVersion>
-    <AssemblyVersion>1.0.5</AssemblyVersion>
+    <PackageVersion>1.0.6</PackageVersion>
+    <AssemblyVersion>1.0.6</AssemblyVersion>
     <RootNamespace>TsOpUndo</RootNamespace>
     <PackageProjectUrl>https://github.com/whistyun/TsOpUndo</PackageProjectUrl>
     <Description>Undo / Redo library for WPF+MVVM</Description>
     <PackageTags>WPF Undo Redo</PackageTags>
+  </PropertyGroup>
+  <PropertyGroup>
+    <!--
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    -->
+    <DocumentationFile>bin\TsOpUndo.xml</DocumentationFile>
   </PropertyGroup>
 </Project>

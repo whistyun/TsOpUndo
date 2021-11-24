@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace TsOpUndo.Internal
 {
-    public class ListWrapper : IList, INotifyCollectionChanged
+    internal class ListWrapper : IList, INotifyCollectionChanged
     {
         private object list;
         private INotifyCollectionChanged listNotify;

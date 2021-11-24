@@ -149,7 +149,6 @@ namespace TsOpUndo.Test
         [Test]
         public void BindListNotify()
         {
-
             var controller = new OperationController();
             var person = new HiPerson()
             {

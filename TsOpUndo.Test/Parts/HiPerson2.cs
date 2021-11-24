@@ -23,6 +23,20 @@ namespace TsOpUndo.Test.Parts
         }
 
         [NoBindHistory]
+        public HiFriend Friend1
+        {
+            set => SetValue(value);
+            get => GetValue<HiFriend>();
+        }
+
+        [NoBindHistory(AllowBindChild = true)]
+        public HiFriend Friend2
+        {
+            set => SetValue(value);
+            get => GetValue<HiFriend>();
+        }
+
+        [NoBindHistory]
         public HiPerson2 Partner1
         {
             set => SetValue(value);
@@ -51,10 +65,27 @@ namespace TsOpUndo.Test.Parts
             get => GetValue<ObservableCollection<HiPerson2>>();
         }
 
+        [NoBindHistory]
+        public ObservableCollection<HiFriend> Friends1
+        {
+            set => SetValue(value);
+            get => GetValue<ObservableCollection<HiFriend>>();
+        }
+
+
+        [NoBindHistory(AllowBindChild = true)]
+        public ObservableCollection<HiFriend> Friends2
+        {
+            set => SetValue(value);
+            get => GetValue<ObservableCollection<HiFriend>>();
+        }
+
         public HiPerson2()
         {
             Children1 = new ObservableCollection<HiPerson2>();
             Children2 = new ObservableCollection<HiPerson2>();
+            Friends1 = new ObservableCollection<HiFriend>();
+            Friends2 = new ObservableCollection<HiFriend>();
         }
 
         public override int GetHashCode()
@@ -75,5 +106,30 @@ namespace TsOpUndo.Test.Parts
 
         public static bool operator ==(HiPerson2 left, HiPerson2 right) => Object.Equals(left, right);
         public static bool operator !=(HiPerson2 left, HiPerson2 right) => !(left == right);
+    }
+
+    class HiFriend
+    {
+        public string NickName { get; set; }
+        public HiPerson2 Person { get; set; }
+
+        public override int GetHashCode()
+        {
+            return Person.GetHashCode() + (NickName ?? "").GetHashCode();
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj is HiFriend p)
+            {
+                return
+                    NickName == p.NickName
+                 && Person == p.Person;
+            }
+            return false;
+        }
+
+        public static bool operator ==(HiFriend left, HiFriend right) => Object.Equals(left, right);
+        public static bool operator !=(HiFriend left, HiFriend right) => !(left == right);
     }
 }
